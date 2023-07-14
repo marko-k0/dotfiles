@@ -1,0 +1,78 @@
+# vim: ft=tmux
+
+# prefix
+set -g prefix2 C-a
+bind C-a send-prefix -2
+
+#set -g default-terminal "tmux-256color"
+set -g default-terminal "xterm-kitty"
+set -g history-limit 10000
+
+setw -g xterm-keys on
+
+# bindings
+#unbind p
+#bind p paste-buffer
+
+bind v split-window -h -c "#{pane_current_path}"
+bind b split-window -c "#{pane_current_path}"
+bind e new-window -n '~/.tmux.conf' "sh -c '\${EDITOR:-vim} ~/.tmux.conf && tmux source ~/.tmux.conf && tmux display \"~/.tmux.conf sourced\"'"
+bind r source-file ~/.tmux.conf \; display '~/.tmux.conf sourced'
+bind C-s set-window-option synchronize-panes
+
+bind -r h select-pane -L
+bind -r j select-pane -D
+bind -r k select-pane -U
+bind -r l select-pane -R
+bind > swap-pane -D
+bind < swap-pane -U
+
+bind -r H resize-pane -L 2
+bind -r J resize-pane -D 2
+bind -r K resize-pane -U 2
+bind -r L resize-pane -R 2
+
+# display
+set -g status on
+set -g base-index 1
+set -g renumber-windows on
+set -g set-titles on
+set -g set-titles-string '#S ● #I #W@#h'
+set -g display-panes-time 800
+set -g display-time 1000
+set -g status-interval 10
+set -g mode-style bg=brightwhite,fg=blue
+setw -g pane-base-index 1
+setw -g automatic-rename on
+
+# activity
+set -g monitor-activity on
+set -g visual-activity off
+
+set -s escape-time 0
+
+## incompatibilites
+
+set -g mouse on
+set -q -g status-utf8 on # tmux < 2.2
+setw -q -g utf8 on
+
+set -q -g mouse-select-pane on; set -q -g mode-mouse on;
+set -q -g mouse-resize-pane on; set -q -g mouse-select-window on
+
+set -s set-clipboard on
+set -s set-clipboard external
+#set -s set-clipboard off
+set -as terminal-features ',xterm-kitty:clipboard'
+
+# vi copy-paste mode
+setw -g mode-keys vi
+bind -T copy-mode-vi 'v' send -X begin-selection; bind -T copy-mode-vi 'y' send -X copy-selection
+#bind-key -T copy-mode-vi 'y' send -X copy-pipe "kitty +kitten clipboard"
+bind-key -T copy-mode-vi y if-shell "test ! -z $KITTY_WINDOW_ID" "send-keys -X copy-pipe 'kitty +kitten clipboard'" "send-keys -X copy-pipe  'pbcopy'"
+#if-shell "which xclip" "bind -T copy-mode-vi 'y' send-keys -X copy-pipe-and-cancel 'xclip -in -selection clipboard'"
+
+#set -g update-environment "DISPLAY SSH_ASKPASS SSH_AGENT_PID SSH_CONNECTION WINDOWID XAUTHORITY"
+set -g update-environment "SSH_AUTH_SOCK SSH_AGENT_PID"
+setenv -g SSH_AUTH_SOCK $HOME/.ssh/ssh_auth_sock
+
