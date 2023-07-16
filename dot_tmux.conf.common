@@ -4,15 +4,11 @@
 set -g prefix2 C-a
 bind C-a send-prefix -2
 
-#set -g default-terminal "tmux-256color"
 set -g default-terminal "xterm-kitty"
+set -g default-shell /usr/local/bin/fish
 set -g history-limit 10000
 
 setw -g xterm-keys on
-
-# bindings
-#unbind p
-#bind p paste-buffer
 
 bind v split-window -h -c "#{pane_current_path}"
 bind b split-window -c "#{pane_current_path}"
