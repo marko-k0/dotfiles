@@ -8,9 +8,9 @@ if status is-interactive
     alias g='git'
     alias k='kubectl'
     alias vim='nvim'
-    set -gx EDITOR /usr/bin/vim
-    set -gx VISUAL /usr/bin/vim
+    set -gx EDITOR vim
+    set -gx VISUAL vim
 end
 
 set -x GOPATH $HOME/go
-set -x PATH $PATH $GOPATH/bin $HOME/.krew/bin
+set -x PATH $PATH $GOPATH/bin $HOME/.krew/bin $HOME/.cargo/bin
