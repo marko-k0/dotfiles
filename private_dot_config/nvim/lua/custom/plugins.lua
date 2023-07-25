@@ -92,6 +92,16 @@ local plugins = {
     config = function() 
       require('maximize').setup()
     end,
-  }
+  },
+  {
+    "nvim-tree/nvim-tree.lua", 
+    opts = {
+      actions = {
+        open_file = {
+          quit_on_open = true,
+        },
+      },
+    },
+  },
 }
 return plugins
