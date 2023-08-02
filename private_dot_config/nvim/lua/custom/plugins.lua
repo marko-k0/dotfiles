@@ -89,12 +89,12 @@ local plugins = {
   },
   {
     "declancm/maximize.nvim",
-    config = function() 
+    config = function()
       require('maximize').setup()
     end,
   },
   {
-    "nvim-tree/nvim-tree.lua", 
+    "nvim-tree/nvim-tree.lua",
     opts = {
       actions = {
         open_file = {
@@ -102,6 +102,42 @@ local plugins = {
         },
       },
     },
+  },
+  {
+    "nvim-telescope/telescope.nvim",
+    config = function()
+      require('telescope').setup{
+        pickers = {
+          find_files = {
+            theme = "ivy",
+          },
+          git_files = {
+            theme = "ivy",
+          },
+          grep_string = {
+            theme = "ivy",
+          },
+          live_grep = {
+            theme = "ivy",
+          },
+          buffers = {
+            theme = "ivy",
+          },
+          old_files = {
+            theme = "ivy",
+          },
+          current_buffer_fuzzy_find = {
+            theme = "ivy",
+          },
+          man_pages = {
+            theme = "ivy",
+          },
+          help_tags = {
+            theme = "ivy",
+          },
+        },
+      }
+    end,
   },
 }
 return plugins
