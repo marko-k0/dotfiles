@@ -123,7 +123,7 @@ local plugins = {
           buffers = {
             theme = "ivy",
           },
-          old_files = {
+          oldfiles = {
             theme = "ivy",
           },
           current_buffer_fuzzy_find = {
@@ -133,6 +133,12 @@ local plugins = {
             theme = "ivy",
           },
           help_tags = {
+            theme = "ivy",
+          },
+          resume = {
+            theme = "ivy",
+          },
+          marks = {
             theme = "ivy",
           },
         },

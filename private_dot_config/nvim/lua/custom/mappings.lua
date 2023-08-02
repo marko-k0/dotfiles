@@ -34,4 +34,14 @@ M.crates = {
   }
 }
 
+M.telescope = {
+  plugin = true,
+
+  n = {
+    -- find
+    ["<leader>fr"] = { "<cmd> Telescope resume <CR>", "Resume previous" },
+    ["<leader>fp"] = { "<cmd> Telescope man_pages <CR>", "Man pages" },
+  },
+}
+
 return M
