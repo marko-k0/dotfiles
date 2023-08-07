@@ -69,6 +69,6 @@ bind-key -T copy-mode-vi y if-shell "test ! -z $KITTY_WINDOW_ID" "send-keys -X c
 #if-shell "which xclip" "bind -T copy-mode-vi 'y' send-keys -X copy-pipe-and-cancel 'xclip -in -selection clipboard'"
 
 #set -g update-environment "DISPLAY SSH_ASKPASS SSH_AGENT_PID SSH_CONNECTION WINDOWID XAUTHORITY"
-set -g update-environment -r "SSH_AUTH_SOCK SSH_AGENT_PID"
+set -g update-environment "SSH_AUTH_SOCK SSH_AGENT_PID"
 setenv -g SSH_AUTH_SOCK $HOME/.ssh/ssh_auth_sock
 

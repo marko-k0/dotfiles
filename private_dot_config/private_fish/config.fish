@@ -7,7 +7,9 @@ if status is-interactive
 
     alias g='git'
     alias k='kubectl'
+    alias kns='kubens'
     alias vim='nvim'
+
     set -gx EDITOR vim
     set -gx VISUAL vim
 end
