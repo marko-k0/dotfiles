@@ -34,10 +34,10 @@ local plugins = {
     end
   },
   {
-    'saecki/crates.nvim',
+    "saecki/crates.nvim",
     ft = {"toml"},
     config = function(_, opts)
-      local crates  = require('crates')
+      local crates  = require("crates")
       crates.setup(opts)
       require('cmp').setup.buffer({
         sources = { { name = "crates" }}
@@ -62,6 +62,14 @@ local plugins = {
   },
   {
     "hrsh7th/nvim-cmp",
+    dependencies = {
+      {
+        "zbirenbaum/copilot-cmp",
+        config = function()
+          require("copilot_cmp").setup()
+        end,
+      },
+    },
     opts = function()
       local M = require "plugins.configs.cmp"
       M.completion.completeopt = "menu,menuone,noselect"
@@ -70,6 +78,7 @@ local plugins = {
         select = false,
       }
       table.insert(M.sources, {name = "crates"})
+      table.insert(M.sources, 1, {name = "copilot", group_index = 2 })
       return M
     end,
   },
@@ -92,6 +101,31 @@ local plugins = {
     config = function()
       require('maximize').setup()
     end,
+  },
+  {
+    "zbirenbaum/copilot.lua",
+    cmd = "Copilot",
+    event = "InsertEnter",
+    config = function()
+      require("copilot").setup({
+        suggestion = { enabled = false },
+        panel = { enabled = false },
+      })
+    end,
+  },
+  {
+    "jackMort/ChatGPT.nvim",
+      event = "VeryLazy",
+      config = function()
+        require("chatgpt").setup({
+          api_key_cmd = "cat /home/marko/openaikey.txt"
+      })
+      end,
+      dependencies = {
+        "MunifTanjim/nui.nvim",
+        "nvim-lua/plenary.nvim",
+        "nvim-telescope/telescope.nvim"
+      }
   },
   {
     "nvim-tree/nvim-tree.lua",
