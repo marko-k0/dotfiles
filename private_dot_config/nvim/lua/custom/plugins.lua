@@ -130,6 +130,9 @@ local plugins = {
   {
     "nvim-tree/nvim-tree.lua",
     opts = {
+      view = {
+        centralize_selection = true,
+      },
       actions = {
         open_file = {
           quit_on_open = true,
