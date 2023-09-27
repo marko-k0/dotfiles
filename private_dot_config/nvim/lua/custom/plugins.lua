@@ -159,6 +159,11 @@ local plugins = {
           },
           buffers = {
             theme = "ivy",
+            mappings = {
+              n = {
+                ["d"] = "delete_buffer",
+              }
+            }
           },
           oldfiles = {
             theme = "ivy",
