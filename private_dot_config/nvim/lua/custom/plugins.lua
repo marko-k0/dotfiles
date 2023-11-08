@@ -146,6 +146,7 @@ local plugins = {
     lazy = false,
     config = function()
       require("aerial").setup({
+        close_on_select = true,
         on_attach = function(bufnr)
           -- Jump forwards/backwards with '{' and '}'
           vim.keymap.set("n", "{", "<cmd>AerialPrev<CR>", { buffer = bufnr })
