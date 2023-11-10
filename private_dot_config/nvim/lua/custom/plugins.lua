@@ -146,6 +146,9 @@ local plugins = {
     lazy = false,
     config = function()
       require("aerial").setup({
+        layout = {
+          default_direction = "right",
+        },
         close_on_select = true,
         on_attach = function(bufnr)
           -- Jump forwards/backwards with '{' and '}'
