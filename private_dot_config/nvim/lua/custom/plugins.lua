@@ -163,6 +163,16 @@ local plugins = {
     },
   },
   {
+    "NeogitOrg/neogit",
+    lazy = false,
+    dependencies = {
+      "nvim-lua/plenary.nvim",         -- required
+      "sindrets/diffview.nvim",        -- optional - Diff integration
+      "nvim-telescope/telescope.nvim", -- optional
+    },
+    config = true,
+  },
+  {
     "nvim-telescope/telescope.nvim",
     config = function()
       require('telescope').setup{
