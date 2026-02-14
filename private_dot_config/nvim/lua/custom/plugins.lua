@@ -17,15 +17,10 @@ local plugins = {
     end,
   },
   {
-    "simrat39/rust-tools.nvim",
+    "mrcjkb/rustaceanvim",
+    version = "^5",
     ft = "rust",
-    dependencies = "neovim/nvim-lspconfig",
-    opts = function ()
-      return require "custom.configs.rust-tools"
-    end,
-    config = function(_, opts)
-      require('rust-tools').setup(opts)
-    end
+    lazy = false,
   },
   {
     "mfussenegger/nvim-dap",
@@ -55,7 +50,7 @@ local plugins = {
   },
   {
     "theHamsta/nvim-dap-virtual-text",
-    lazy = false,
+    dependencies = { "mfussenegger/nvim-dap" },
     config = function(_, opts)
       require("nvim-dap-virtual-text").setup()
     end
@@ -114,18 +109,27 @@ local plugins = {
     end,
   },
   {
-    "jackMort/ChatGPT.nvim",
-      event = "VeryLazy",
-      config = function()
-        require("chatgpt").setup({
-          api_key_cmd = "cat /home/marko/openaikey.txt"
+    "olimorris/codecompanion.nvim",
+    event = "VeryLazy",
+    dependencies = {
+      "nvim-lua/plenary.nvim",
+      "nvim-treesitter/nvim-treesitter",
+    },
+    config = function()
+      require("codecompanion").setup({
+        strategies = {
+          chat = { adapter = "openai" },
+          inline = { adapter = "openai" },
+        },
+        adapters = {
+          openai = function()
+            return require("codecompanion.adapters").extend("openai", {
+              env = { api_key = "OPENAI_API_KEY" },
+            })
+          end,
+        },
       })
-      end,
-      dependencies = {
-        "MunifTanjim/nui.nvim",
-        "nvim-lua/plenary.nvim",
-        "nvim-telescope/telescope.nvim"
-      }
+    end,
   },
   {
     "nvim-tree/nvim-tree.lua",
@@ -176,44 +180,14 @@ local plugins = {
     "nvim-telescope/telescope.nvim",
     config = function()
       require('telescope').setup{
+        defaults = require('telescope.themes').get_ivy(),
         pickers = {
-          find_files = {
-            theme = "ivy",
-          },
-          git_files = {
-            theme = "ivy",
-          },
-          grep_string = {
-            theme = "ivy",
-          },
-          live_grep = {
-            theme = "ivy",
-          },
           buffers = {
-            theme = "ivy",
             mappings = {
               n = {
                 ["d"] = "delete_buffer",
               }
             }
-          },
-          oldfiles = {
-            theme = "ivy",
-          },
-          current_buffer_fuzzy_find = {
-            theme = "ivy",
-          },
-          man_pages = {
-            theme = "ivy",
-          },
-          help_tags = {
-            theme = "ivy",
-          },
-          resume = {
-            theme = "ivy",
-          },
-          marks = {
-            theme = "ivy",
           },
         },
       }

@@ -10,9 +10,9 @@ if status is-interactive
     alias kns='kubens'
     alias vim='nvim'
 
-    set -gx EDITOR vim
-    set -gx VISUAL vim
+    set -gx EDITOR nvim
+    set -gx VISUAL nvim
 end
 
 set -x GOPATH $HOME/go
-set -x PATH $PATH $GOPATH/bin $HOME/.krew/bin $HOME/.cargo/bin
+fish_add_path $GOPATH/bin $HOME/.krew/bin $HOME/.cargo/bin

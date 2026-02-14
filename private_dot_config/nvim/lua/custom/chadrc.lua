@@ -2,7 +2,7 @@
 local M = {}
 M.ui = {
   theme = 'gruvbox',
-  theme_toggle = { "onedark", "solarized_dark" },
+  theme_toggle = { "gruvbox", "onedark" },
   transparency = true,
   telescope = {
     style = "bordered"

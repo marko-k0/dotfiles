@@ -6,7 +6,7 @@ bind C-a send-prefix -2
 
 set -g default-terminal "xterm-kitty"
 set -g default-shell /usr/bin/fish
-set -g history-limit 10000
+set -g history-limit 50000
 
 setw -g xterm-keys on
 
@@ -56,7 +56,6 @@ setw -q -g utf8 on
 set -q -g mouse-select-pane on; set -q -g mode-mouse on;
 set -q -g mouse-resize-pane on; set -q -g mouse-select-window on
 
-set -s set-clipboard on
 set -s set-clipboard external
 #set -s set-clipboard off
 set -as terminal-features ',xterm-kitty:clipboard'
