@@ -4,11 +4,9 @@
 set -g prefix2 C-a
 bind C-a send-prefix -2
 
-set -g default-terminal "xterm-kitty"
+set -g default-terminal "tmux-256color"
 set -g default-shell /usr/bin/fish
 set -g history-limit 50000
-
-setw -g xterm-keys on
 
 bind v split-window -h -c "#{pane_current_path}"
 bind b split-window -c "#{pane_current_path}"
@@ -46,28 +44,18 @@ set -g monitor-activity on
 set -g visual-activity off
 
 set -s escape-time 0
-
-## incompatibilites
-
+set -g focus-events on
 set -g mouse on
-set -q -g status-utf8 on # tmux < 2.2
-setw -q -g utf8 on
 
-set -q -g mouse-select-pane on; set -q -g mode-mouse on;
-set -q -g mouse-resize-pane on; set -q -g mouse-select-window on
-
+# clipboard & terminal features
 set -s set-clipboard external
-#set -s set-clipboard off
 set -as terminal-features ',xterm-kitty:clipboard'
+set -as terminal-overrides ',*:Smulx=\E[4::%p1%dm'
 
 # vi copy-paste mode
 setw -g mode-keys vi
 bind -T copy-mode-vi 'v' send -X begin-selection; bind -T copy-mode-vi 'y' send -X copy-selection
-#bind-key -T copy-mode-vi 'y' send -X copy-pipe "kitty +kitten clipboard"
 bind-key -T copy-mode-vi y if-shell "test ! -z $KITTY_WINDOW_ID" "send-keys -X copy-pipe 'kitty +kitten clipboard'" "send-keys -X copy-pipe  'pbcopy'"
-#if-shell "which xclip" "bind -T copy-mode-vi 'y' send-keys -X copy-pipe-and-cancel 'xclip -in -selection clipboard'"
 
-#set -g update-environment "DISPLAY SSH_ASKPASS SSH_AGENT_PID SSH_CONNECTION WINDOWID XAUTHORITY"
 set -g update-environment "SSH_AUTH_SOCK SSH_AGENT_PID"
 setenv -g SSH_AUTH_SOCK $HOME/.ssh/ssh_auth_sock
-
