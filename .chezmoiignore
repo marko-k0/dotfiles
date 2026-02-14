@@ -3,3 +3,5 @@ README
 LICENSE
 .git
 .gitignore
+init-ubuntu.sh
+init-arch.sh
