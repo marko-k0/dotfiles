@@ -21,6 +21,13 @@ local plugins = {
     version = "^5",
     ft = "rust",
     lazy = false,
+    init = function()
+      vim.g.rustaceanvim = {
+        server = {
+          load_vscode_settings = false,
+        },
+      }
+    end,
   },
   {
     "mfussenegger/nvim-dap",
