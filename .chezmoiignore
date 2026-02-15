@@ -5,3 +5,4 @@ LICENSE
 .gitignore
 init-ubuntu.sh
 init-arch.sh
+.config/fish/secrets.fish
