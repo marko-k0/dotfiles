@@ -5,4 +5,5 @@ LICENSE
 .gitignore
 init-ubuntu.sh
 init-arch.sh
+init-raspbian.sh
 .config/fish/secrets.fish
