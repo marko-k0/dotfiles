@@ -132,6 +132,16 @@ rm -rf "$HOME/.config/fish/conf.d/fzf.fish" \
        "$HOME/.config/fish/functions/tide.fish" \
        "$HOME/.config/fish/conf.d/_tide_"*
 
+echo "==> Installing Tailscale..."
+if ! command -v tailscale &>/dev/null; then
+    curl -fsSL https://tailscale.com/install.sh | sh
+fi
+
+echo "==> Installing NordVPN..."
+if ! command -v nordvpn &>/dev/null; then
+    sh -c "$(curl -sSf https://downloads.nordcdn.com/apps/linux/install.sh)"
+fi
+
 echo "==> Installing TPM (Tmux Plugin Manager)..."
 if [ ! -d "$HOME/.tmux/plugins/tpm" ]; then
     git clone --depth 1 https://github.com/tmux-plugins/tpm "$HOME/.tmux/plugins/tpm"
@@ -150,3 +160,5 @@ echo "Done! Log out and back in for fish to become your default shell."
 echo ""
 echo "Post-install:"
 echo "  - Run 'tmux' and press prefix+I to verify tmux plugins"
+echo "  - Run 'sudo tailscale up' to connect to your tailnet"
+echo "  - Run 'nordvpn login' and 'nordvpn connect' to set up NordVPN"
