@@ -5,7 +5,7 @@ REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 echo "==> Installing system packages..."
 sudo apt-get update -qq
-sudo apt-get install -y fish tmux git curl fzf
+sudo apt-get install -y fish tmux vim git curl fzf
 
 # kitty-terminfo may not be available on Raspbian
 sudo apt-get install -y kitty-terminfo 2>/dev/null || true
@@ -16,65 +16,64 @@ if ! infocmp tmux-256color &>/dev/null; then
     sudo apt-get install -y ncurses-term 2>/dev/null || true
 fi
 
-echo "==> Installing Neovim from source..."
-if command -v nvim &>/dev/null && nvim --version | head -1 | grep -qE 'v0\.(1[0-9]|[2-9])'; then
-    echo "    Neovim already installed: $(nvim --version | head -1)"
+echo "==> Setting up Vim config..."
+if [ ! -f "$HOME/.vimrc" ]; then
+    cat > "$HOME/.vimrc" <<'VIMRC_EOF'
+" Minimal Vim config for Raspbian
+
+set number
+set relativenumber
+set expandtab
+set shiftwidth=2
+set tabstop=2
+set smartindent
+set ignorecase
+set smartcase
+set mouse=a
+set signcolumn=yes
+set updatetime=250
+set incsearch
+set hlsearch
+set hidden
+set noswapfile
+set backspace=indent,eol,start
+set laststatus=2
+set wildmenu
+
+" Colors
+if has('termguicolors')
+  set termguicolors
+endif
+syntax on
+
+" Leader key
+let mapleader = " "
+
+" Keymaps
+nnoremap <leader>w :w<CR>
+nnoremap <leader>q :q<CR>
+nnoremap <Esc> :noh<CR>
+nnoremap <C-h> <C-w>h
+nnoremap <C-j> <C-w>j
+nnoremap <C-k> <C-w>k
+nnoremap <C-l> <C-w>l
+
+" OSC 52 clipboard (works over SSH)
+if has('clipboard') || has('xterm_clipboard')
+  set clipboard=unnamedplus
 else
-    sudo apt-get install -y ninja-build gettext cmake unzip curl build-essential
-    rm -rf /tmp/neovim-build
-    git clone --depth 1 --branch stable https://github.com/neovim/neovim /tmp/neovim-build
-    cd /tmp/neovim-build
-    make CMAKE_BUILD_TYPE=Release
-    sudo make install
-    cd -
-    rm -rf /tmp/neovim-build
-fi
-
-echo "==> Setting up minimal Neovim config..."
-mkdir -p "$HOME/.config/nvim"
-if [ ! -f "$HOME/.config/nvim/init.lua" ]; then
-    cat > "$HOME/.config/nvim/init.lua" <<'NVIM_EOF'
--- Minimal Neovim config for Raspbian
-
--- Options
-vim.opt.number = true
-vim.opt.relativenumber = true
-vim.opt.expandtab = true
-vim.opt.shiftwidth = 2
-vim.opt.tabstop = 2
-vim.opt.smartindent = true
-vim.opt.termguicolors = true
-vim.opt.ignorecase = true
-vim.opt.smartcase = true
-vim.opt.mouse = "a"
-vim.opt.signcolumn = "yes"
-vim.opt.updatetime = 250
-
--- OSC 52 clipboard (works over SSH)
-vim.g.clipboard = {
-  name = 'OSC 52',
-  copy = {
-    ['+'] = require('vim.ui.clipboard.osc52').copy('+'),
-    ['*'] = require('vim.ui.clipboard.osc52').copy('*'),
-  },
-  paste = {
-    ['+'] = require('vim.ui.clipboard.osc52').paste('+'),
-    ['*'] = require('vim.ui.clipboard.osc52').paste('*'),
-  },
-}
-
--- Leader key
-vim.g.mapleader = " "
-
--- Keymaps
-vim.keymap.set("n", "<leader>w", "<cmd>w<cr>")
-vim.keymap.set("n", "<leader>q", "<cmd>q<cr>")
-vim.keymap.set("n", "<Esc>", "<cmd>noh<cr>")
-vim.keymap.set("n", "<C-h>", "<C-w>h")
-vim.keymap.set("n", "<C-j>", "<C-w>j")
-vim.keymap.set("n", "<C-k>", "<C-w>k")
-vim.keymap.set("n", "<C-l>", "<C-w>l")
-NVIM_EOF
+  " Manual OSC 52 yank for Vim 8.x without clipboard support
+  function! OscYank() abort
+    let text = getreg('"')
+    let encoded = system('printf ' . shellescape(text) . ' | base64 | tr -d "\n"')
+    call writefile(["\x1b]52;c;" . encoded . "\x07"], '/dev/stderr', 'b')
+  endfunction
+  augroup osc52
+    autocmd!
+    autocmd TextYankPost * call OscYank()
+  augroup END
+endif
+VIMRC_EOF
 fi
 
 echo "==> Installing chezmoi..."
