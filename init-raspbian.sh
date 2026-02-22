@@ -92,6 +92,46 @@ echo "==> Applying dotfiles with chezmoi..."
 export PATH="$HOME/.local/bin:$PATH"
 chezmoi apply
 
+echo "==> Writing minimal Fish config (Fish 3.1 compatible)..."
+# The chezmoi-deployed config.fish uses fish_add_path and plugins that
+# require Fish 3.4+. Raspbian 11 ships Fish 3.1.2, so we override with
+# a minimal compatible config.
+cat > "$HOME/.config/fish/config.fish" <<'FISH_EOF'
+if status is-interactive
+    fish_vi_key_bindings
+    refresh_tmux_vars
+    user_key_bindings
+
+    alias g='git'
+    alias k='kubectl'
+    alias vim='vim'
+
+    set -gx EDITOR vim
+    set -gx VISUAL vim
+end
+
+set -x GOPATH $HOME/go
+
+# fish_add_path not available in Fish < 3.2, use set -gx PATH instead
+for p in $GOPATH/bin $HOME/.krew/bin $HOME/.cargo/bin $HOME/.local/bin
+    if test -d $p; and not contains $p $PATH
+        set -gx PATH $p $PATH
+    end
+end
+FISH_EOF
+
+# Remove fish_plugins to prevent Fisher from installing incompatible plugins
+rm -f "$HOME/.config/fish/fish_plugins"
+
+# Remove any tide/fzf.fish files that chezmoi may have deployed
+rm -rf "$HOME/.config/fish/conf.d/fzf.fish" \
+       "$HOME/.config/fish/functions/fzf_configure_bindings.fish" \
+       "$HOME/.config/fish/functions/_fzf_"* \
+       "$HOME/.config/fish/functions/fish_prompt.fish" \
+       "$HOME/.config/fish/functions/_tide_"* \
+       "$HOME/.config/fish/functions/tide.fish" \
+       "$HOME/.config/fish/conf.d/_tide_"*
+
 echo "==> Installing TPM (Tmux Plugin Manager)..."
 if [ ! -d "$HOME/.tmux/plugins/tpm" ]; then
     git clone --depth 1 https://github.com/tmux-plugins/tpm "$HOME/.tmux/plugins/tpm"
@@ -99,16 +139,6 @@ fi
 
 echo "==> Installing tmux plugins..."
 "$HOME/.tmux/plugins/tpm/bin/install_plugins"
-
-echo "==> Installing Fisher and Fish plugins..."
-fish -c '
-    if not functions -q fisher
-        curl -sL https://raw.githubusercontent.com/jorgebucaran/fisher/main/functions/fisher.fish | source
-        fisher install jorgebucaran/fisher
-    else
-        fisher update
-    end
-'
 
 echo "==> Changing default shell to Fish..."
 if [ "$SHELL" != "/usr/bin/fish" ]; then
@@ -119,5 +149,4 @@ echo ""
 echo "Done! Log out and back in for fish to become your default shell."
 echo ""
 echo "Post-install:"
-echo "  - Create ~/.config/fish/secrets.fish with your env vars"
 echo "  - Run 'tmux' and press prefix+I to verify tmux plugins"
