@@ -7,3 +7,4 @@ init-ubuntu.sh
 init-arch.sh
 init-raspbian.sh
 .config/fish/secrets.fish
+.config/nvim/lua/plugins/**
