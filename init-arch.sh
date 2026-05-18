@@ -56,6 +56,20 @@ fish -c '
 echo "==> Bootstrapping Neovim plugins"
 nvim --headless "+Lazy! sync" +qa 2>/dev/null || true
 
+echo "==> Installing Claude Code"
+if command -v claude &>/dev/null; then
+  echo "    Claude Code already installed"
+else
+  curl -fsSL https://claude.ai/install.sh | bash
+fi
+
+echo "==> Installing Happier"
+if command -v happier &>/dev/null; then
+  echo "    happier already installed"
+else
+  HAPPIER_NONINTERACTIVE=1 curl -fsSL https://happier.dev/install | bash
+fi
+
 echo "==> Setting default shell to fish"
 if [ "$SHELL" != "/usr/bin/fish" ]; then
   chsh -s /usr/bin/fish
@@ -71,3 +85,4 @@ echo "Post-install steps:"
 echo "  - Set OPENAI_API_KEY env var for codecompanion.nvim"
 echo "  - Log out and back in for fish shell to take effect"
 echo "  - Run 'tide configure' to set up the fish prompt theme"
+echo "  - Run 'happier auth login --no-open' to authenticate (use --no-open over SSH)"
