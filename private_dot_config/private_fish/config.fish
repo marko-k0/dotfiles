@@ -26,17 +26,6 @@ test -f ~/.config/fish/secrets.fish; and source ~/.config/fish/secrets.fish
 # Add your local binaries to the path
 fish_add_path $HOME/.local/bin
 
-### --- Node.js / NVM Setup ---
-# Tell nvm.fish to use your existing .nvm folder if you want to keep it,
-# or leave this out to use the default ~/.config/nvm (cleaner for Fish).
-set -gx nvm_data $HOME/.nvm
-
-# Automatically use the LTS version if available
-if type -q nvm
-    # This ensures your shell starts with a valid node version
-    nvm use lts > /dev/null 2>&1
-end
-
 # pnpm
 set -gx PNPM_HOME "/home/marko/.local/share/pnpm"
 if not string match -q -- $PNPM_HOME $PATH
