@@ -40,6 +40,7 @@ The init script will install all dependencies, apply dotfiles, and set fish as t
 dotfiles/
 ├── init-ubuntu.sh                   # Ubuntu/Debian setup script
 ├── init-arch.sh                     # Arch Linux setup script
+├── install-go.sh                    # Latest Go toolchain (both distros)
 ├── dot_tmux.conf                    # ~/.tmux.conf
 ├── dot_tmux.conf.common             # ~/.tmux.conf.common
 ├── private_dot_config/

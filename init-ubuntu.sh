@@ -74,6 +74,9 @@ else
     curl -fsSL https://claude.ai/install.sh | bash
 fi
 
+echo "==> Installing latest Go..."
+"$REPO_DIR/install-go.sh"
+
 echo "==> Installing Happier..."
 if command -v happier &>/dev/null; then
     echo "    happier already installed"

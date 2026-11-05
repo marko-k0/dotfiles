@@ -18,7 +18,7 @@ if status is-interactive
 end
 
 set -x GOPATH $HOME/go
-fish_add_path $GOPATH/bin $HOME/.krew/bin $HOME/.cargo/bin
+fish_add_path $GOPATH/bin $HOME/.krew/bin $HOME/.cargo/bin /usr/local/go/bin
 
 test -f ~/.config/fish/secrets.fish; and source ~/.config/fish/secrets.fish
 

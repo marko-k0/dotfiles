@@ -6,5 +6,6 @@ LICENSE
 init-ubuntu.sh
 init-arch.sh
 init-raspbian.sh
+install-go.sh
 .config/fish/secrets.fish
 .config/nvim/lua/plugins/**
