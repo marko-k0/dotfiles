@@ -3,9 +3,8 @@ README
 LICENSE
 .git
 .gitignore
-init-ubuntu.sh
-init-arch.sh
-init-raspbian.sh
-install-go.sh
+init.sh
 .config/fish/secrets.fish
 .config/nvim/lua/plugins/**
+{{ if ne .chezmoi.osRelease.id "raspbian" }}.vimrc
+{{ end }}

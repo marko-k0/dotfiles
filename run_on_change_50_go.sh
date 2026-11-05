@@ -1,19 +1,29 @@
 #!/bin/bash
-# Installs the latest stable Go toolchain.
+# Installs/updates the latest stable Go toolchain.
+# Runs via chezmoi on EVERY apply (run_on_change), but exits fast when the
+# installed version already matches upstream latest.
 #
 # - Arch Linux: pacman (AUR helper fallback), tracks the rolling release.
 # - Ubuntu (incl. 24.04): official tarball into /usr/local/go, since apt lags
 #   upstream. Checksum is verified against go.dev's published metadata.
-#
-# Safe to re-run: skips work when the latest version is already installed.
-# Usage: install-go.sh
 set -euo pipefail
 
 GOLANG_BASE_URL="https://go.dev/dl"
 
-log()  { echo "==> $*"; }
+log()  { echo "==> [go] $*"; }
 info() { echo "    $*"; }
-die()  { echo "ERROR: $*" >&2; exit 1; }
+die()  { echo "ERROR: [go] $*" >&2; exit 1; }
+
+# Raspbian: not supported here (heavyweight tarball; the Pi gets no Go toolchain)
+os_id=""
+if [ -r /etc/os-release ]; then
+    # shellcheck source=/etc/os-release
+    . /etc/os-release
+    os_id="${ID:-}"
+fi
+case "$os_id" in
+    *raspbian*) log "Raspbian: Go toolchain skipped"; exit 0 ;;
+esac
 
 # curl wrappers with an IPv4 fallback: on some dual-stack networks the IPv6
 # route to dl.google.com misbehaves (404s) while IPv4 works.
@@ -203,7 +213,6 @@ install_go_arch() {
 # -----------------------------------------------------------------------------
 main() {
     detect_distro
-    log "Detected distro: ${ID:-unknown} ${VERSION_ID:-}"
 
     if $IS_UBUNTU; then
         install_go_ubuntu

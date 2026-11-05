@@ -1,0 +1,54 @@
+" Minimal Vim config for Raspbian (deployed only on Raspbian via .chezmoiignore)
+
+set number
+set relativenumber
+set expandtab
+set shiftwidth=2
+set tabstop=2
+set smartindent
+set ignorecase
+set smartcase
+set mouse=a
+set signcolumn=yes
+set updatetime=250
+set incsearch
+set hlsearch
+set hidden
+set noswapfile
+set backspace=indent,eol,start
+set laststatus=2
+set wildmenu
+
+" Colors
+if has('termguicolors')
+  set termguicolors
+endif
+syntax on
+
+" Leader key
+let mapleader = " "
+
+" Keymaps
+nnoremap <leader>w :w<CR>
+nnoremap <leader>q :q<CR>
+nnoremap <Esc> :noh<CR>
+nnoremap <C-h> <C-w>h
+nnoremap <C-j> <C-w>j
+nnoremap <C-k> <C-w>k
+nnoremap <C-l> <C-w>l
+
+" OSC 52 clipboard (works over SSH)
+if has('clipboard') || has('xterm_clipboard')
+  set clipboard=unnamedplus
+else
+  " Manual OSC 52 yank for Vim 8.x without clipboard support
+  function! OscYank() abort
+    let text = getreg('"')
+    let encoded = system('printf ' . shellescape(text) . ' | base64 | tr -d "\n"')
+    call writefile(["\x1b]52;c;" . encoded . "\x07"], '/dev/stderr', 'b')
+  endfunction
+  augroup osc52
+    autocmd!
+    autocmd TextYankPost * call OscYank()
+  augroup END
+endif
