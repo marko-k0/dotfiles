@@ -39,6 +39,17 @@ the checkout, and runs `chezmoi apply`. Everything else happens inside chezmoi:
 Re-running `init.sh` (or `chezmoi apply`) is always safe: `run_once` scripts
 re-run only when their content changes, and the mise hook reconciles state.
 
+## Verify an install
+
+```bash
+go version                              # pinned binary, symlinked as /usr/local/bin/go
+mise ls                                 # tools and the pins they came from
+mise which nvim && nvim --version       # shim -> versioned install
+fish -c 'kubectl version --client'      # shims resolve inside fish (incl. fish -c)
+git -C ~/.config/nvim log -1 --oneline  # NvChad base present
+./update.sh                             # should finish with "done: everything up to date"
+```
+
 ## Declarative software
 
 Everything installed is described in one file, `.chezmoidata/software.yaml`:
