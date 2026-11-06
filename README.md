@@ -14,13 +14,13 @@ That's the only entry point, for every supported distro (Ubuntu 24.04, Arch,
 Raspbian). `init.sh` installs curl (if missing) and chezmoi, points chezmoi at
 the checkout, and runs `chezmoi apply`. Everything else happens inside chezmoi:
 
-- `run_once_before_*` scripts run **before** dotfiles are written
-  (system packages, Neovim + NvChad)
+- `run_once_before_*` scripts (in `.chezmoiscripts/`) run **before** dotfiles
+  are written (system packages, Neovim + NvChad)
 - dotfiles are written (templates branch on the distro via `.osRelease`)
 - `run_once_after_*` scripts run **after** (TPM, Fisher, plugin syncs,
   Claude Code, Happier, Raspbian VPNs)
-- `run_on_change_*` scripts run on **every** apply but exit fast when
-  already up to date (Go toolchain, login shell)
+- `run_onchange_*` scripts run when their content changes (Go toolchain,
+  login shell); both self-skip fast when already up to date
 
 | Script | What |
 |--------|------|
@@ -32,11 +32,11 @@ the checkout, and runs `chezmoi apply`. Everything else happens inside chezmoi:
 | `run_once_after_30_claude.sh` | Claude Code |
 | `run_once_after_40_happier.sh` | Happier |
 | `run_once_after_50_vpn.sh` | Tailscale + NordVPN (Raspbian only) |
-| `run_on_change_50_go.sh` | latest Go: tarball+sha256 on Ubuntu, pacman on Arch |
-| `run_on_change_55_shell.sh` | fish as login shell |
+| `run_onchange_50_go.sh` | latest Go: tarball+sha256 on Ubuntu, pacman on Arch |
+| `run_onchange_55_shell.sh` | fish as login shell |
 
 Re-running `init.sh` (or `chezmoi apply`) is always safe: `run_once` scripts
-re-run only when their content changes, and the `run_on_change` scripts skip
+re-run only when their content changes, and the `run_onchange` scripts skip
 themselves when up to date.
 
 ## Distro differences
@@ -72,9 +72,11 @@ Rust (rustaceanvim, crates.nvim, rust.vim), Go (go.nvim, gopls), Copilot, codeco
 ```
 dotfiles/
 ├── init.sh                          # Only entry point: chezmoi + apply
-├── run_once_before_*.sh             # System packages, Neovim, NvChad
-├── run_once_after_*.sh              # TPM, Fisher, nvim plugins, Claude, Happier, VPNs
-├── run_on_change_*.sh               # Go toolchain, login shell
+├── .chezmoiscripts/                 # All run_* scripts (chezmoi executes them;
+│   │                                # not written to $HOME)
+│   ├── run_once_before_*.sh         # System packages, Neovim, NvChad
+│   ├── run_once_after_*.sh          # TPM, Fisher, nvim plugins, Claude, Happier, VPNs
+│   └── run_onchange_*.sh            # Go toolchain, login shell
 ├── dot_tmux.conf                    # ~/.tmux.conf
 ├── dot_tmux.conf.common             # ~/.tmux.conf.common
 ├── dot_vimrc                        # ~/.vimrc (Raspbian only, via .chezmoiignore)

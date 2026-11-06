@@ -1,7 +1,7 @@
 #!/bin/bash
 # Installs/updates the latest stable Go toolchain.
-# Runs via chezmoi on EVERY apply (run_on_change), but exits fast when the
-# installed version already matches upstream latest.
+# Runs via chezmoi whenever this script's contents change (run_onchange),
+# but exits fast when the installed version already matches upstream latest.
 #
 # - Arch Linux: pacman (AUR helper fallback), tracks the rolling release.
 # - Ubuntu (incl. 24.04): official tarball into /usr/local/go, since apt lags

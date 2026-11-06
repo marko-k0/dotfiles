@@ -1,6 +1,7 @@
 #!/bin/bash
 # Sets fish as the login shell if it is not already.
-# Runs via chezmoi on EVERY apply (run_on_change); exits fast when already set.
+# Runs via chezmoi whenever this script's contents change (run_onchange);
+# exits fast when the login shell is already fish.
 set -euo pipefail
 log() { echo "==> [shell] $*"; }
 
