@@ -1,0 +1,78 @@
+#!/bin/bash
+# Full end-to-end test of this repo on a bare Arch Linux container.
+# Used by CI (.github/workflows/ci.yml) and runnable locally:
+#   docker run --rm --network host -v "$PWD":/repo -w /repo \
+#     archlinux:base-devel bash /repo/.github/test/arch.sh
+# Runs as root: provisions a test user with passwordless sudo, runs
+# init.sh as that user, then asserts the installed state.
+set -euo pipefail
+
+# Containers ship their own /etc/gai.conf. Mirror the host workaround: on
+# networks where IPv6 to dl.google.com and sigstore TUF fails, downloads 404.
+# No-op on IPv4-only runners (GitHub Actions).
+grep -qE '^precedence[[:space:]]+::ffff:0:0/96' /etc/gai.conf 2>/dev/null \
+    || echo 'precedence ::ffff:0:0/96 100' >> /etc/gai.conf
+
+pacman -Syu --noconfirm >/dev/null
+pacman -S --noconfirm --needed sudo git curl >/dev/null
+useradd -m -s /bin/bash tester
+echo "tester ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/tester
+chmod 440 /etc/sudoers.d/tester
+
+REPO="$(cd "$(dirname "$0")/../.." && pwd)"
+DATA="$REPO/.chezmoidata/software.yaml"
+
+tool_pin() {
+    sed -n '/^  tools:/,/^[a-z]/p' "$DATA" \
+        | grep -E "^    \"?$1\"?:" | head -1 \
+        | sed 's/.*"\([^"]*\)"[[:space:]]*$/\1/'
+}
+
+echo "=== Running init.sh as tester ==="
+su tester -c "HOME=/home/tester bash $REPO/init.sh" 2>&1 | tee /tmp/init.log
+
+echo "=== All setup scripts must have run ==="
+# claude/happier skip in CI (their installers 403 datacenter IPs)
+for stage in packages mise nvchad tmux fish nvim-plugins shell; do
+    grep -q "==> \[$stage\]" /tmp/init.log || {
+        echo "ERROR: [${stage}] script never ran" >&2; exit 1;
+    }
+done
+grep -q "\[claude\] CI environment detected" /tmp/init.log || {
+    echo "ERROR: claude script did not hit its CI skip" >&2; exit 1;
+}
+
+echo "=== Assertions ==="
+test -x /usr/bin/fish
+test -x /usr/bin/direnv
+# Hybrid mode: go is linked into /usr/local/bin (mise owns the version)
+test -x /usr/local/bin/go
+/usr/local/bin/go version
+# Arch no longer installs neovim/fzf from pacman: mise owns them
+if pacman -Q neovim >/dev/null 2>&1; then
+    echo "ERROR: neovim should be mise-managed, not pacman-installed" >&2; exit 1
+fi
+if pacman -Q go >/dev/null 2>&1; then
+    echo "ERROR: go should be mise-managed, not pacman-installed" >&2; exit 1
+fi
+test -f /home/tester/.config/fish/config.fish
+fish -n /home/tester/.config/fish/config.fish
+grep -q "mise activate fish" /home/tester/.config/fish/config.fish
+test -f /home/tester/.config/mise/config.toml
+test -f /home/tester/.tmux.conf
+test -d /home/tester/.config/nvim/lua/custom
+test -f /home/tester/.local/bin/chezmoi
+pacman -Qi fish tmux >/dev/null
+su tester -c "fish -c 'echo fish-runs'"
+
+pinned_go="$(tool_pin go)"
+pinned_nvim="$(tool_pin neovim)"
+echo "pinned: go=${pinned_go} neovim=${pinned_nvim}"
+if [ -n "$pinned_go" ] && [ "$pinned_go" != "latest" ]; then
+    test "$(/usr/local/bin/go env GOVERSION)" = "go${pinned_go}"
+fi
+if [ -n "$pinned_nvim" ] && [ "$pinned_nvim" != "latest" ]; then
+    su tester -c "fish -c 'nvim --version'" | head -1 | grep -qF "v${pinned_nvim}"
+fi
+
+echo "ARCH: ALL ASSERTIONS PASSED"

@@ -1,0 +1,83 @@
+{{- /* Distro features from /etc/os-release (rpi4 = Raspbian-style: old fish, vim). */ -}}
+{{- /* Works under both `chezmoi apply` (.chezmoidata.osRelease) and */ -}}
+{{- /* `chezmoi execute-template < file` (.chezmoi.osRelease or root). */ -}}
+{{- $osData := . -}}
+{{- if hasKey . "chezmoidata" -}}{{- $osData = .chezmoidata -}}{{- end -}}
+{{- if hasKey $osData "chezmoi" -}}{{- $osData = index $osData "chezmoi" -}}{{- end -}}
+{{- $osRelease := dict -}}
+{{- if hasKey $osData "osRelease" -}}{{- $osRelease = index $osData "osRelease" -}}{{- end -}}
+{{- $id := "" -}}
+{{- if hasKey $osRelease "id" -}}{{- $id = index $osRelease "id" -}}{{- end -}}
+{{- $isRaspbian := or (eq $id "raspbian") (eq $id "raspios") -}}
+{{- $editor := "nvim" -}}
+{{- if $isRaspbian -}}{{- $editor = "vim" -}}{{- end -}}
+# mise: version-managed dev tools (.chezmoidata/software.yaml). Activation runs
+# for non-interactive fish too, so `fish -c` and ssh commands see the tools.
+# mise itself lives in ~/.local/bin, which is not on PATH in every context.
+if not contains "$HOME/.local/bin" $PATH
+    set -gx PATH "$HOME/.local/bin" $PATH
+end
+if command -q mise
+    mise activate fish | source
+end
+
+if status is-interactive
+    # Commands to run in interactive sessions can go here
+    fish_vi_key_bindings
+    #fish_ssh_agent
+    refresh_tmux_vars
+    user_key_bindings
+
+    alias g='git'
+{{- if not $isRaspbian }}
+    alias k='kubectl'
+    alias s='sgpt'
+    alias kns='kubens'
+    alias clipcp="xsel --clipboard --input"
+    alias clipcat="xsel --clipboard --output"
+
+    function q --description "llm query piped through glow"
+        llm $argv | glow -p
+    end
+{{- end }}
+    alias vim={{ $editor }}
+
+    set -gx EDITOR {{ $editor }}
+    set -gx VISUAL {{ $editor }}
+end
+
+set -x GOPATH $HOME/go
+{{- if $isRaspbian }}
+# fish_add_path not available in Fish < 3.2; set PATH explicitly
+for p in $GOPATH/bin $HOME/.krew/bin $HOME/.cargo/bin $HOME/.local/bin
+    if test -d $p; and not contains $p $PATH
+        set -gx PATH $p $PATH
+    end
+end
+{{- else }}
+fish_add_path $GOPATH/bin $HOME/.krew/bin $HOME/.cargo/bin
+{{- end }}
+
+test -f ~/.config/fish/secrets.fish; and source ~/.config/fish/secrets.fish
+{{- if not $isRaspbian }}
+
+### --- Environment Paths ---
+# Add your local binaries to the path
+fish_add_path $HOME/.local/bin
+
+# pnpm
+set -gx PNPM_HOME "$HOME/.local/share/pnpm"
+if not string match -q -- $PNPM_HOME $PATH
+  set -gx PATH "$PNPM_HOME" $PATH
+end
+# pnpm end
+
+direnv hook fish | source
+
+# Added by LM Studio CLI (lms)
+set -gx PATH $PATH $HOME/.lmstudio/bin
+# End of LM Studio CLI section
+
+# Generated for envman. Do not edit.
+test -s ~/.config/envman/load.fish; and source ~/.config/envman/load.fish
+{{- end }}

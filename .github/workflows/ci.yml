@@ -1,0 +1,117 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    # Weekly: catch upstream breakage (new tool versions, URL rot)
+    - cron: "23 4 * * 1"
+
+env:
+  TESTER_HOME: /home/tester
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install shellcheck and fish
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y shellcheck fish
+      - name: shellcheck all scripts
+        # -x: follow the source=/etc/os-release directives in the scripts
+        run: shellcheck -x init.sh update.sh .chezmoiscripts/*.sh .github/test/*.sh
+      - name: Install chezmoi
+        run: |
+          sh -c "$(curl -fsLS get.chezmoi.io)" -- -b "$HOME/.local/bin"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: shellcheck rendered hook templates
+        # Hooks are templates (.sh.tmpl): render them with the real data file,
+        # then lint the output. --source . is required for .chezmoidata.
+        run: |
+          mkdir -p /tmp/rendered
+          for t in .chezmoiscripts/*.sh.tmpl; do
+            out="/tmp/rendered/$(basename "${t%.tmpl}")"
+            chezmoi execute-template --source . < "$t" > "$out"
+          done
+          if grep -rn '{{' /tmp/rendered/; then
+            echo "ERROR: unrendered template action in hook output" >&2; exit 1
+          fi
+          shellcheck -x /tmp/rendered/*.sh
+      - name: Render mise config, validate TOML, assert one owner per tool
+        run: |
+          chezmoi execute-template --source . \
+            < private_dot_config/mise/config.toml.tmpl > /tmp/mise.toml
+          python3 -c 'import tomllib; d = tomllib.load(open("/tmp/mise.toml","rb")); print("mise tools:", len(d["tools"]))'
+          # A tool must not be installed by both the distro and mise. Raspbian
+          # is exempt: it is the legacy vim-only set and runs no mise tools.
+          tools_section="$(sed -n '/^  tools:/,/^[a-z]/p' .chezmoidata/software.yaml)"
+          for distro in debian arch; do
+            pkgs="$(sed -n "/^  ${distro}:/,/^  [a-z]/p" .chezmoidata/software.yaml \
+              | grep -E '^    - ' | sed 's/^    - //')"
+            for pkg in $pkgs; do
+              if printf '%s\n' "$tools_section" | grep -qE "^    \"?${pkg}\"?:"; then
+                echo "ERROR: ${pkg} is declared in both packages.${distro} and mise.tools" >&2
+                exit 1
+              fi
+            done
+          done
+          echo "one owner per tool: OK"
+      - name: Render fish config for each distro branch and parse-check
+        run: |
+          # Default (this runner): Ubuntu branch
+          chezmoi execute-template \
+            < private_dot_config/private_fish/config.fish.tmpl > /tmp/render-ubuntu.fish
+          fish -n /tmp/render-ubuntu.fish
+
+          # Raspbian branch via override data
+          printf '{"chezmoi":{"osRelease":{"id":"raspbian","idLike":"debian"}}}' > /tmp/ovr.json
+          chezmoi execute-template --override-data-file /tmp/ovr.json \
+            < private_dot_config/private_fish/config.fish.tmpl > /tmp/render-raspbian.fish
+          fish -n /tmp/render-raspbian.fish
+          # Raspbian branch must NOT contain non-Raspbian extras
+          ! grep -q kubectl /tmp/render-raspbian.fish
+          ! grep -q direnv /tmp/render-raspbian.fish
+          ! grep -q pnpm /tmp/render-raspbian.fish
+      - name: Render .chezmoiignore for both branches
+        run: |
+          chezmoi execute-template < .chezmoiignore > /tmp/ignore-ubuntu
+          chezmoi execute-template --override-data-file /tmp/ovr.json \
+            < .chezmoiignore > /tmp/ignore-raspbian
+          # .vimrc deploys on Raspbian only: ignored elsewhere, not ignored there
+          if ! grep -q '^\.vimrc$' /tmp/ignore-ubuntu; then
+            echo "ERROR: .vimrc should be ignored on ubuntu" >&2; exit 1
+          fi
+          if grep -q '^\.vimrc$' /tmp/ignore-raspbian; then
+            echo "ERROR: .vimrc should NOT be ignored on raspbian" >&2; exit 1
+          fi
+          # Bootstrap scripts are run from the checkout, never written to $HOME
+          for f in init.sh update.sh; do
+            if ! grep -qx "$f" /tmp/ignore-ubuntu; then
+              echo "ERROR: $f should be ignored (else it is copied to \$HOME)" >&2
+              exit 1
+            fi
+          done
+
+  ubuntu-2404:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: End-to-end test in an ubuntu:24.04 container
+        run: |
+          docker run --rm --network host -e DOTFILES_CI=1 \
+            -v "$GITHUB_WORKSPACE":/repo -w /repo \
+            ubuntu:24.04 bash /repo/.github/test/ubuntu.sh
+
+  archlinux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: End-to-end test in an archlinux container
+        run: |
+          docker run --rm --network host -e DOTFILES_CI=1 \
+            -v "$GITHUB_WORKSPACE":/repo -w /repo \
+            archlinux:base-devel bash /repo/.github/test/arch.sh
