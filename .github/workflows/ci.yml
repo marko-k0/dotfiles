@@ -23,7 +23,7 @@ jobs:
           sudo apt-get install -y shellcheck fish
       - name: shellcheck all scripts
         # -x: follow the source=/etc/os-release directives in the scripts
-        run: shellcheck -x init.sh .chezmoiscripts/*.sh .github/test/*.sh
+        run: shellcheck -x init.sh update.sh .chezmoiscripts/*.sh .github/test/*.sh
       - name: Install chezmoi
         run: |
           sh -c "$(curl -fsLS get.chezmoi.io)" -- -b "$HOME/.local/bin"
@@ -56,6 +56,13 @@ jobs:
           if grep -q '^\.vimrc$' /tmp/ignore-raspbian; then
             echo "ERROR: .vimrc should NOT be ignored on raspbian" >&2; exit 1
           fi
+          # Bootstrap scripts are run from the checkout, never written to $HOME
+          for f in init.sh update.sh; do
+            if ! grep -qx "$f" /tmp/ignore-ubuntu; then
+              echo "ERROR: $f should be ignored (else it is copied to \$HOME)" >&2
+              exit 1
+            fi
+          done
 
   ubuntu-2404:
     runs-on: ubuntu-24.04

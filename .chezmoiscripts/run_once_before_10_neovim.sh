@@ -47,6 +47,12 @@ fi
 if [ -d "$HOME/.config/nvim/lua/core" ]; then
     log "NvChad already present"
 else
+    # Never silently destroy an existing (non-NvChad) config: move it aside.
+    if [ -d "$HOME/.config/nvim" ] && [ -n "$(ls -A "$HOME/.config/nvim" 2>/dev/null)" ]; then
+        backup="$HOME/.config/nvim.bak-$(date +%Y%m%d-%H%M%S)"
+        log "Existing nvim config is not NvChad; moving it to ${backup}"
+        mv "$HOME/.config/nvim" "$backup"
+    fi
     log "Cloning NvChad v2.0"
     rm -rf "$HOME/.config/nvim"
     git clone --branch v2.0 --depth 1 \

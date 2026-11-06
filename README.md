@@ -67,11 +67,51 @@ Rust (rustaceanvim, crates.nvim, rust.vim), Go (go.nvim, gopls), Copilot, codeco
 - Run `tide configure` to set up the fish prompt
 - Set `OPENAI_API_KEY` environment variable for codecompanion.nvim
 
+## Updating
+
+`chezmoi apply` does **not** upgrade anything installed by the hooks. chezmoi
+only executes `run_once_*` / `run_onchange_*` scripts when their *contents*
+change (per content hash, so an unchanged hook never runs again), so upstream
+releases are picked up by re-running the hooks:
+
+```bash
+./update.sh            # Go, Neovim/NvChad, tmux + fish + nvim plugins
+./update.sh --system   # also apt upgrade / pacman -Syu
+```
+
+Each hook self-checks first, so this is safe and fast when already current (the
+Go check costs ~0.4s when up to date). Individual pieces:
+
+| Component | Update |
+|-----------|--------|
+| Go | `bash .chezmoiscripts/run_onchange_50_go.sh` (tarball+sha256 or pacman) |
+| Neovim | `bash .chezmoiscripts/run_once_before_10_neovim.sh` (installs only if missing/older than 0.10) |
+| NvChad | `git -C ~/.config/nvim pull --ff-only` |
+| nvim plugins | `nvim --headless "+Lazy! update" +qa` |
+| tmux plugins | `~/.tmux/plugins/tpm/bin/update_plugins all`, then `prefix + I` |
+| fish plugins | `fish -c 'fisher update'` |
+| system packages | `sudo apt-get update && sudo apt-get upgrade` / `sudo pacman -Syu` |
+| Claude Code | self-updates in place |
+
+To force **all** hooks to re-run from scratch (blunt tool: resets chezmoi's
+record of which scripts ran, and of which files were last written — unmanaged
+local edits can then be overwritten without a prompt):
+
+```bash
+chezmoi state delete-bucket --bucket=scriptState   # run_once_* re-run
+chezmoi state delete-bucket --bucket=entryState    # run_onchange_* re-run
+chezmoi apply
+```
+
+Editing a hook's content re-runs that hook on the next apply, which is the
+intended way to change what a hook does.
+
 ## Repository structure
 
 ```
 dotfiles/
 ├── init.sh                          # Only entry point: chezmoi + apply
+├── update.sh                        # Re-run hooks: toolchains + plugins
 ├── .chezmoiscripts/                 # All run_* scripts (chezmoi executes them;
 │   │                                # not written to $HOME)
 │   ├── run_once_before_*.sh         # System packages, Neovim, NvChad
