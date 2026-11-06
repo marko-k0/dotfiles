@@ -39,12 +39,58 @@ Re-running `init.sh` (or `chezmoi apply`) is always safe: `run_once` scripts
 re-run only when their content changes, and the `run_onchange` scripts skip
 themselves when up to date.
 
+## Declarative software
+
+Everything installed is described in one file, `.chezmoidata/software.yaml`:
+
+```yaml
+software:
+  go:
+    version: "1.27.3"
+    sha256:
+      amd64: "65efbc80..."
+      arm64: "a06e9930..."
+  neovim:
+    version: "0.12.6"
+
+packages:
+  debian:   [fish, tmux, git, curl, fzf, powerline, direnv, kitty-terminfo]
+  arch:     [fish, tmux, git, curl, fzf, powerline, kitty-terminfo, neovim, direnv]
+  raspbian: [fish, tmux, vim, git, curl, fzf, direnv]
+```
+
+The hooks are chezmoi templates (`run_*.sh.tmpl`), so this file is rendered
+into each hook before it runs. Changing a value changes that hook's content
+hash, which makes chezmoi re-run exactly that hook on the next `chezmoi apply`
+and nothing else - declarative versioning with no extra tooling:
+
+```bash
+$EDITOR .chezmoidata/software.yaml   # bump go: "1.28.0" (and its sha256)
+chezmoi apply                        # only the Go hook re-runs
+```
+
+`version: "latest"` opts a tool back into tracking upstream instead of pinning.
+
+Limits worth knowing:
+
+- **Arch** package versions are not pinned: pacman follows the rolling repos, so
+  `packages.arch` is a list, not a lockfile. Exact pinning there needs an AUR
+  snapshot, mise, or Nix.
+- Go's `sha256` is per architecture: update both when bumping, or leave an entry
+  empty and the digest is looked up from go.dev's release feed.
+- Distro packages install whatever the repo currently ships; only the
+  upstream-fetched tools (Go, Neovim) carry exact versions.
+
+For fully declarative *system* management (every package and version locked,
+plus rollbacks), the tool for that is Nix + Home Manager on top of this repo -
+chezmoi would then only manage the few files Nix does not.
+
 ## Distro differences
 
 Handled inside the scripts/templates, no per-distro bootstrap needed:
 
-- **Ubuntu/Debian**: Neovim from GitHub (apt's is ancient), Go from the
-  official tarball with sha256 verification (apt lags upstream)
+- **Ubuntu/Debian**: Neovim from the pinned GitHub release (apt's is ancient),
+  Go from the official tarball at the pinned version with sha256 verification
 - **Arch**: pacman for everything (tracks upstream closely)
 - **Raspbian**: lighter package set (vim, no powerline), minimal fish config
   (old fish), `dot_vimrc` deployed via a templated `.chezmoiignore` rule,
@@ -69,33 +115,40 @@ Rust (rustaceanvim, crates.nvim, rust.vim), Go (go.nvim, gopls), Copilot, codeco
 
 ## Updating
 
-`chezmoi apply` does **not** upgrade anything installed by the hooks. chezmoi
-only executes `run_once_*` / `run_onchange_*` scripts when their *contents*
-change (per content hash, so an unchanged hook never runs again), so upstream
-releases are picked up by re-running the hooks:
+Two separate things, on purpose:
+
+**Changing what is installed / which version** - edit
+`.chezmoidata/software.yaml` and `chezmoi apply`. Only the affected hook re-runs
+(its rendered content changed).
+
+**Re-running the hooks at the current pins** - `./update.sh` re-checks Go and
+updates the plugin tooling (NvChad, tmux, fisher, Lazy). Installed toolchains
+stay at their declared versions:
 
 ```bash
-./update.sh            # Go, Neovim/NvChad, tmux + fish + nvim plugins
+./update.sh            # Go re-check, NvChad, tmux/fish/nvim plugins
 ./update.sh --system   # also apt upgrade / pacman -Syu
 ```
 
-Each hook self-checks first, so this is safe and fast when already current (the
-Go check costs ~0.4s when up to date). Individual pieces:
+`chezmoi apply` alone never re-runs an already-executed hook: chezmoi keys
+`run_once_*` / `run_onchange_*` on the content hash, so an unchanged (rendered)
+hook is skipped. `update.sh` re-runs them explicitly, and each self-checks
+first, so it is safe and fast when current (Go re-check ~0.4s).
 
 | Component | Update |
 |-----------|--------|
-| Go | `bash .chezmoiscripts/run_onchange_50_go.sh` (tarball+sha256 or pacman) |
-| Neovim | `bash .chezmoiscripts/run_once_before_10_neovim.sh` (installs only if missing/older than 0.10) |
-| NvChad | `git -C ~/.config/nvim pull --ff-only` |
+| Go | bump `software.go.version` + sha256, `chezmoi apply` (or `./update.sh` to re-check the current pin) |
+| Neovim | bump `software.neovim.version`, `chezmoi apply` |
+| NvChad | `git -C ~/.config/nvim pull --ff-only`, also done by `./update.sh` |
 | nvim plugins | `nvim --headless "+Lazy! update" +qa` |
 | tmux plugins | `~/.tmux/plugins/tpm/bin/update_plugins all`, then `prefix + I` |
 | fish plugins | `fish -c 'fisher update'` |
 | system packages | `sudo apt-get update && sudo apt-get upgrade` / `sudo pacman -Syu` |
 | Claude Code | self-updates in place |
 
-To force **all** hooks to re-run from scratch (blunt tool: resets chezmoi's
-record of which scripts ran, and of which files were last written — unmanaged
-local edits can then be overwritten without a prompt):
+To force **unchanged** hooks to re-run (blunt tool: also resets chezmoi's record
+of which files were last written, so unmanaged local edits can be overwritten
+without a prompt):
 
 ```bash
 chezmoi state delete-bucket --bucket=scriptState   # run_once_* re-run
@@ -112,11 +165,14 @@ intended way to change what a hook does.
 dotfiles/
 ├── init.sh                          # Only entry point: chezmoi + apply
 ├── update.sh                        # Re-run hooks: toolchains + plugins
-├── .chezmoiscripts/                 # All run_* scripts (chezmoi executes them;
-│   │                                # not written to $HOME)
-│   ├── run_once_before_*.sh         # System packages, Neovim, NvChad
+├── .chezmoidata/
+│   └── software.yaml                # Declarative: packages + pinned versions
+├── .chezmoiscripts/                 # All run_* hooks (chezmoi executes them;
+│   │                                # not written to $HOME); *.tmpl render from
+│   │                                # .chezmoidata/software.yaml
+│   ├── run_once_before_*.sh[.tmpl]  # System packages, Neovim, NvChad
 │   ├── run_once_after_*.sh          # TPM, Fisher, nvim plugins, Claude, Happier, VPNs
-│   └── run_onchange_*.sh            # Go toolchain, login shell
+│   └── run_onchange_*.sh[.tmpl]     # Go toolchain, login shell
 ├── dot_tmux.conf                    # ~/.tmux.conf
 ├── dot_tmux.conf.common             # ~/.tmux.conf.common
 ├── dot_vimrc                        # ~/.vimrc (Raspbian only, via .chezmoiignore)

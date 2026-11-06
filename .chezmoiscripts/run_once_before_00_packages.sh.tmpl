@@ -1,12 +1,22 @@
 #!/bin/bash
 # System packages via the distro package manager.
 # Runs via chezmoi BEFORE dotfiles are written.
+#
+# The package lists live in .chezmoidata/software.yaml, not here: this file is a
+# template, so editing the list changes the rendered script and chezmoi re-runs
+# it on the next apply.
+#
 # - Ubuntu/Debian: apt
 # - Arch: pacman (also provides neovim)
 # - Raspbian: same apt path, lighter set (vim instead of nvim, no powerline)
 # - direnv: config.fish sources its hook on every startup
 set -euo pipefail
 log() { echo "==> [packages] $*"; }
+
+# Rendered from .chezmoidata/software.yaml
+PKGS_DEBIAN="{{ join " " .packages.debian }}"
+PKGS_ARCH="{{ join " " .packages.arch }}"
+PKGS_RASPBIAN="{{ join " " .packages.raspbian }}"
 
 os_id=""
 if [ -r /etc/os-release ]; then
@@ -20,20 +30,20 @@ if command -v apt-get >/dev/null 2>&1; then
         raspbian|raspios)
             log "Installing system packages (apt, Raspbian set)"
             sudo apt-get update -qq
-            sudo apt-get install -y fish tmux vim git curl fzf direnv
+            # shellcheck disable=SC2086  # rendered package list is a word list
+            sudo apt-get install -y $PKGS_RASPBIAN
             ;;
         *)
             log "Installing system packages (apt)"
             sudo apt-get update -qq
-            PKGS="fish tmux git curl fzf powerline direnv"
-            if apt-cache show kitty-terminfo >/dev/null 2>&1; then
-                # shellcheck disable=SC2086  # PKGS is a controlled word list
-                sudo apt-get install -y $PKGS kitty-terminfo
-            else
-                # kitty-terminfo may not be packaged (e.g. some Debian derivatives)
-                # shellcheck disable=SC2086
-                sudo apt-get install -y $PKGS
+            pkgs="$PKGS_DEBIAN"
+            if ! apt-cache show kitty-terminfo >/dev/null 2>&1; then
+                # kitty-terminfo is not packaged everywhere (e.g. some
+                # Debian derivatives): install the rest without it.
+                pkgs="${pkgs//kitty-terminfo/}"
             fi
+            # shellcheck disable=SC2086  # rendered package list is a word list
+            sudo apt-get install -y $pkgs
             ;;
     esac
     # tmux-256color terminfo may be missing on older Debian/Ubuntu/Raspbian
@@ -42,8 +52,8 @@ if command -v apt-get >/dev/null 2>&1; then
     fi
 elif command -v pacman >/dev/null 2>&1; then
     log "Installing system packages (pacman)"
-    sudo pacman -Syu --noconfirm --needed \
-        fish tmux git curl fzf powerline kitty-terminfo neovim direnv
+    # shellcheck disable=SC2086  # rendered package list is a word list
+    sudo pacman -Syu --noconfirm --needed $PKGS_ARCH
 else
     echo "ERROR: [packages] unsupported package manager (need apt-get or pacman)" >&2
     exit 1

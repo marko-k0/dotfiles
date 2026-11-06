@@ -45,4 +45,18 @@ test -d /home/tester/.config/nvim/lua/custom
 test -f /home/tester/.local/bin/chezmoi
 su tester -c "fish -c 'echo fish-runs'"
 
+# Declared versions must actually be installed (read from the data file, so a
+# stale pin fails CI instead of silently installing whatever upstream ships).
+pinned_go="$(sed -n '/^  go:/,/^  [a-z]/p' /repo/.chezmoidata/software.yaml \
+    | grep 'version:' | head -1 | sed 's/.*"\([^"]*\)".*/\1/')"
+pinned_nvim="$(sed -n '/^  neovim:/,/^  [a-z]/p' /repo/.chezmoidata/software.yaml \
+    | grep 'version:' | head -1 | sed 's/.*"\([^"]*\)".*/\1/')"
+echo "pinned: go=${pinned_go} neovim=${pinned_nvim}"
+if [ -n "$pinned_go" ] && [ "$pinned_go" != "latest" ]; then
+    test "$(/usr/local/go/bin/go env GOVERSION)" = "go${pinned_go}"
+fi
+if [ -n "$pinned_nvim" ] && [ "$pinned_nvim" != "latest" ]; then
+    /usr/local/bin/nvim --version | head -1 | grep -qF "v${pinned_nvim}"
+fi
+
 echo "UBUNTU 24.04: ALL ASSERTIONS PASSED"

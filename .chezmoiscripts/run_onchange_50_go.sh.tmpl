@@ -1,14 +1,19 @@
 #!/bin/bash
-# Installs/updates the latest stable Go toolchain.
-# Runs via chezmoi whenever this script's contents change (run_onchange),
-# but exits fast when the installed version already matches upstream latest.
+# Installs the Go toolchain at the version pinned in .chezmoidata/software.yaml
+# (or "latest" to track upstream). This file is a template, so bumping the pin
+# changes the rendered script and chezmoi re-runs it on the next apply.
 #
 # - Arch Linux: pacman (AUR helper fallback), tracks the rolling release.
 # - Ubuntu (incl. 24.04): official tarball into /usr/local/go, since apt lags
-#   upstream. Checksum is verified against go.dev's published metadata.
+#   upstream. The download is verified against the pinned sha256.
 set -euo pipefail
 
 GOLANG_BASE_URL="https://go.dev/dl"
+
+# Rendered from .chezmoidata/software.yaml
+GOLANG_VERSION="{{ .software.go.version }}"
+GOLANG_SHA256_AMD64="{{ .software.go.sha256.amd64 }}"
+GOLANG_SHA256_ARM64="{{ .software.go.sha256.arm64 }}"
 
 log()  { echo "==> [go] $*"; }
 info() { echo "    $*"; }
@@ -60,7 +65,12 @@ detect_distro() {
 # -----------------------------------------------------------------------------
 # Upstream version + checksum lookup (go.dev JSON release feed)
 # -----------------------------------------------------------------------------
-get_latest_version() {
+resolve_version() {
+    # Pinned version from the data file wins; "latest" tracks upstream.
+    if [ -n "$GOLANG_VERSION" ] && [ "$GOLANG_VERSION" != "latest" ]; then
+        printf '%s\n' "$GOLANG_VERSION"
+        return 0
+    fi
     # First entry of ?mode=json is the latest stable release; "version" is
     # "goX.Y.Z". curl -f fails on HTTP errors; the feed is small.
     curl_meta "${GOLANG_BASE_URL}/?mode=json" \
@@ -72,12 +82,23 @@ get_latest_version() {
 
 get_expected_sha256() {
     # $1: tarball filename, e.g. go1.27.3.linux-amd64.tar.gz
+    # $2: go arch (amd64/arm64)
+    # A pin from the data file is preferred: it survives go.dev dropping older
+    # releases from the feed. Empty pin falls back to the release feed.
+    local tgz="$1" goarch="$2" pinned=""
+    case "$goarch" in
+        amd64) pinned="$GOLANG_SHA256_AMD64" ;;
+        arm64) pinned="$GOLANG_SHA256_ARM64" ;;
+    esac
+    if [ -n "$pinned" ]; then
+        printf '%s\n' "$pinned"
+        return 0
+    fi
     # The JSON entry for each file looks like:
     #   "filename": "go1.27.3.linux-amd64.tar.gz",
     #   ...
     #   "sha256": "<64 hex chars>",
     # grep -A6 spans that block; the only 64-hex string in it is the digest.
-    local tgz="$1"
     curl_meta "${GOLANG_BASE_URL}/?mode=json" \
         | grep -A6 "\"${tgz}\"" \
         | grep -oE '[a-f0-9]{64}' \
@@ -110,7 +131,7 @@ install_go_tarball() {
         || die "download failed: ${url}"
 
     local expected actual
-    expected="$(get_expected_sha256 "${tgz}")"
+    expected="$(get_expected_sha256 "${tgz}" "$goarch")"
     [ -n "$expected" ] || die "could not look up sha256 for ${tgz}"
     actual="$(sha256sum "${tmp_dir}/${tgz}" | awk '{print $1}')"
     if [ "$actual" != "$expected" ]; then
@@ -134,7 +155,7 @@ install_go_tarball() {
 
 install_go_ubuntu() {
     local latest
-    latest="$(get_latest_version)" || die "cannot determine latest Go version"
+    latest="$(resolve_version)" || die "cannot determine Go version"
     [ -n "$latest" ] || die "could not determine latest Go version (network issue?)"
 
     # Detect the currently installed version regardless of PATH: the toolchain
@@ -172,30 +193,24 @@ install_go_ubuntu() {
 # Arch: pacman, AUR helper as fallback
 # -----------------------------------------------------------------------------
 install_go_arch() {
-    local latest
-    latest="$(get_latest_version)" || die "cannot determine latest Go version"
-    [ -n "$latest" ] || die "could not determine latest Go version (network issue?)"
-
-    # On Arch the pacman package owns /usr/bin/go, so PATH detection is right.
-    local current=""
+    # Arch is rolling and pacman owns /usr/bin/go: the distro moves it forward
+    # with `pacman -Syu` (or ./update.sh --system). Pinning here would fight the
+    # distro, so an existing install is accepted as-is.
     if command -v go >/dev/null 2>&1; then
-        current="$(go env GOVERSION 2>/dev/null | sed 's/^go//')"
-    fi
-
-    if [ "$current" = "$latest" ]; then
-        info "Go ${latest} already installed and up to date"
+        info "$(go version) (pacman-managed; upgrade with 'pacman -Syu')"
         return 0
     fi
 
-    log "Installing/updating go package (upstream: ${latest})"
+    local latest
+    latest="$(resolve_version)" || die "cannot determine Go version"
+    [ -n "$latest" ] || die "could not determine Go version (network issue?)"
+
+    log "Installing go package (upstream: ${latest})"
     if sudo pacman -S --noconfirm --needed go; then
         if command -v go >/dev/null 2>&1; then
             info "Installed: $(go version)"
         else
             info "Installed: go (run 'pacman -Qi go' for version)"
-        fi
-        if [ -n "$current" ]; then
-            info "Note: Arch rolls go forward with the distro; minor drift from upstream ${latest} is normal."
         fi
         return 0
     fi

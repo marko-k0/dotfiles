@@ -1,0 +1,56 @@
+# Declarative software definition: single source of truth for what gets
+# installed and at which version.
+#
+# The hooks in .chezmoiscripts/ are templates, so these values are baked into
+# each script's rendered content. That means:
+#   - change a version or package here, run `chezmoi apply`
+#   - only the affected hook re-runs (its content hash changed)
+#   - nothing else is touched
+#
+# Version values: an exact version ("1.27.3") pins it; "latest" tracks upstream.
+
+software:
+  go:
+    version: "1.27.3"
+    # sha256 of the official go.dev tarballs, per architecture.
+    # Pinned so an older pin can still be verified after go.dev's release feed
+    # moves on. Leave an entry empty to look the digest up from the feed.
+    sha256:
+      amd64: "65efbc80fdc1fa2cd2631cad5b481777a68e8725f34e89f50fc6ac714e379b40"
+      arm64: "a06e99309dbcbdca1a8ccd2282c3ee146e55930886e26b4f1193269587165f49"
+  neovim:
+    # Installed from GitHub releases on Ubuntu (apt's is ancient); on Arch the
+    # pacman package is used instead and follows the distro.
+    version: "0.12.6"
+
+packages:
+  # apt-get list (Ubuntu, Debian and derivatives)
+  debian:
+    - fish
+    - tmux
+    - git
+    - curl
+    - fzf
+    - powerline
+    - direnv
+    - kitty-terminfo
+  # pacman list (Arch; neovim comes from here too)
+  arch:
+    - fish
+    - tmux
+    - git
+    - curl
+    - fzf
+    - powerline
+    - kitty-terminfo
+    - neovim
+    - direnv
+  # Raspbian: lighter, vim-only setup
+  raspbian:
+    - fish
+    - tmux
+    - vim
+    - git
+    - curl
+    - fzf
+    - direnv

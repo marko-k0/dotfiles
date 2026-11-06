@@ -52,6 +52,24 @@ run_step() {
     failed+=("$name")
 }
 
+# Hooks are templates: chezmoi renders them (applying .chezmoidata/software.yaml)
+# before running. Render the same way here so update.sh executes exactly what
+# `chezmoi apply` would.
+# shellcheck disable=SC2317  # called indirectly through run_step "$@"
+render_and_run() {
+    local tmpl="$1" tmp rc
+    tmp="$(mktemp)"
+    if ! chezmoi execute-template --source "$REPO_DIR" < "$tmpl" > "$tmp"; then
+        warn "cannot render ${tmpl##*/}"
+        rm -f "$tmp"
+        return 1
+    fi
+    bash "$tmp"
+    rc=$?
+    rm -f "$tmp"
+    return "$rc"
+}
+
 # ---------------------------------------------------------------------------
 # Distro packages (opt-in: this is the one step that upgrades the whole system)
 # ---------------------------------------------------------------------------
@@ -70,16 +88,17 @@ fi
 # ---------------------------------------------------------------------------
 # Toolchains installed by the chezmoi hooks (same scripts, re-run directly)
 # ---------------------------------------------------------------------------
-if [ -f "$SCRIPTS/run_onchange_50_go.sh" ]; then
-    run_step "go" bash "$SCRIPTS/run_onchange_50_go.sh"
+if [ -f "$SCRIPTS/run_onchange_50_go.sh.tmpl" ]; then
+    run_step "go" render_and_run "$SCRIPTS/run_onchange_50_go.sh.tmpl"
 fi
 
-if ! command -v nvim >/dev/null 2>&1 && [ -f "$SCRIPTS/run_once_before_10_neovim.sh" ]; then
+if ! command -v nvim >/dev/null 2>&1 \
+    && [ -f "$SCRIPTS/run_once_before_10_neovim.sh.tmpl" ]; then
     # Only when Neovim is absent: the hook is a bootstrap, and its NvChad step
     # re-clones the config tree. Updating an existing install is a no-op anyway
     # (it keeps any version >= 0.10), so calling it on every update adds risk
     # without benefit. NvChad itself is pulled below.
-    run_step "neovim" bash "$SCRIPTS/run_once_before_10_neovim.sh"
+    run_step "neovim" render_and_run "$SCRIPTS/run_once_before_10_neovim.sh.tmpl"
 fi
 
 # NvChad is a git clone owned by chezmoi's custom layer: pull it forward.
