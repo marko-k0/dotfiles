@@ -17,6 +17,13 @@ set -euo pipefail
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPTS="$REPO_DIR/.chezmoiscripts"
 
+# mise shims so mise-managed tools (nvim, fzf, ...) resolve in this
+# non-interactive shell.
+if [ -d "$HOME/.local/share/mise/shims" ]; then
+    PATH="$HOME/.local/share/mise/shims:$PATH"
+    export PATH
+fi
+
 log()  { echo "==> [update] $*"; }
 warn() { echo "WARNING: [update] $*" >&2; }
 
@@ -86,19 +93,22 @@ if $SYSTEM; then
 fi
 
 # ---------------------------------------------------------------------------
-# Toolchains installed by the chezmoi hooks (same scripts, re-run directly)
+# mise-managed tools (versions from .chezmoidata/software.yaml)
 # ---------------------------------------------------------------------------
-if [ -f "$SCRIPTS/run_onchange_50_go.sh.tmpl" ]; then
-    run_step "go" render_and_run "$SCRIPTS/run_onchange_50_go.sh.tmpl"
-fi
-
-if ! command -v nvim >/dev/null 2>&1 \
-    && [ -f "$SCRIPTS/run_once_before_10_neovim.sh.tmpl" ]; then
-    # Only when Neovim is absent: the hook is a bootstrap, and its NvChad step
-    # re-clones the config tree. Updating an existing install is a no-op anyway
-    # (it keeps any version >= 0.10), so calling it on every update adds risk
-    # without benefit. NvChad itself is pulled below.
-    run_step "neovim" render_and_run "$SCRIPTS/run_once_before_10_neovim.sh.tmpl"
+MISE_BIN="$(command -v mise 2>/dev/null || true)"
+[ -n "$MISE_BIN" ] || MISE_BIN="$HOME/.local/bin/mise"
+if [ -x "$MISE_BIN" ]; then
+    log "Updating mise itself"
+    run_step "mise self-update" "$MISE_BIN" self-update -y --no-plugins
+    # Pins govern upgrades; this only moves tools declared as "latest".
+    log "Upgrading mise tools"
+    run_step "mise upgrade" "$MISE_BIN" upgrade --yes
+    log "Refreshing lockfile"
+    run_step "mise lock" "$MISE_BIN" lock --global
+    # Re-run the apply hook so system tool symlinks/shim dirs follow the pins.
+    run_step "mise apply" render_and_run "$SCRIPTS/run_after_05_mise.sh.tmpl"
+else
+    warn "mise not found; skipping toolchain updates"
 fi
 
 # NvChad is a git clone owned by chezmoi's custom layer: pull it forward.

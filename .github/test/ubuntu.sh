@@ -7,6 +7,12 @@
 # init.sh as that user, then asserts the installed state.
 set -euo pipefail
 
+# Containers ship their own /etc/gai.conf. Mirror the host workaround: on
+# networks where IPv6 to dl.google.com and sigstore TUF fails, downloads 404.
+# No-op on IPv4-only runners (GitHub Actions).
+grep -qE '^precedence[[:space:]]+::ffff:0:0/96' /etc/gai.conf 2>/dev/null \
+    || echo 'precedence ::ffff:0:0/96 100' >> /etc/gai.conf
+
 apt-get update -qq
 apt-get install -y sudo git curl >/dev/null
 useradd -m -s /bin/bash tester
@@ -14,13 +20,21 @@ echo "tester ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/tester
 chmod 440 /etc/sudoers.d/tester
 
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"
+DATA="$REPO/.chezmoidata/software.yaml"
+
+# Read a pinned version for a mise tool from the data file.
+tool_pin() {
+    sed -n '/^  tools:/,/^[a-z]/p' "$DATA" \
+        | grep -E "^    \"?$1\"?:" | head -1 \
+        | sed 's/.*"\([^"]*\)"[[:space:]]*$/\1/'
+}
 
 echo "=== Running init.sh as tester ==="
 su tester -c "HOME=/home/tester bash $REPO/init.sh" 2>&1 | tee /tmp/init.log
 
 echo "=== All setup scripts must have run ==="
 # claude/happier skip in CI (their installers 403 datacenter IPs)
-for stage in packages neovim tmux fish nvim-plugins go shell; do
+for stage in packages mise nvchad tmux fish nvim-plugins shell; do
     grep -q "==> \[$stage\]" /tmp/init.log || {
         echo "ERROR: [${stage}] script never ran" >&2; exit 1;
     }
@@ -30,33 +44,41 @@ grep -q "\[claude\] CI environment detected" /tmp/init.log || {
 }
 
 echo "=== Assertions ==="
-test -x /usr/local/go/bin/go
-/usr/local/go/bin/go version
+# Hybrid mode: go is a real binary in /usr/local/bin (no shims, no mise)
+test -x /usr/local/bin/go
+/usr/local/bin/go version
 test -x /usr/bin/fish
 test -x /usr/bin/direnv
+# fzf and neovim come from mise, not from apt
+if dpkg -l fzf neovim 2>/dev/null | grep -q '^ii'; then
+    echo "ERROR: fzf/neovim should be mise-managed, not apt-installed" >&2; exit 1
+fi
 test -f /home/tester/.config/fish/config.fish
 fish -n /home/tester/.config/fish/config.fish
-grep -q "/usr/local/go/bin" /home/tester/.config/fish/config.fish
+grep -q "mise activate fish" /home/tester/.config/fish/config.fish
+test -f /home/tester/.config/mise/config.toml
 test -f /home/tester/.tmux.conf
-# nvim: the official GitHub build symlinked into /usr/local/bin
-sudo test -x /usr/local/bin/nvim
-/usr/local/bin/nvim --version | head -1
 test -d /home/tester/.config/nvim/lua/custom
 test -f /home/tester/.local/bin/chezmoi
 su tester -c "fish -c 'echo fish-runs'"
 
 # Declared versions must actually be installed (read from the data file, so a
 # stale pin fails CI instead of silently installing whatever upstream ships).
-pinned_go="$(sed -n '/^  go:/,/^  [a-z]/p' /repo/.chezmoidata/software.yaml \
-    | grep 'version:' | head -1 | sed 's/.*"\([^"]*\)".*/\1/')"
-pinned_nvim="$(sed -n '/^  neovim:/,/^  [a-z]/p' /repo/.chezmoidata/software.yaml \
-    | grep 'version:' | head -1 | sed 's/.*"\([^"]*\)".*/\1/')"
-echo "pinned: go=${pinned_go} neovim=${pinned_nvim}"
+pinned_go="$(tool_pin go)"
+pinned_nvim="$(tool_pin neovim)"
+pinned_kubectl="$(tool_pin kubectl)"
+echo "pinned: go=${pinned_go} neovim=${pinned_nvim} kubectl=${pinned_kubectl}"
 if [ -n "$pinned_go" ] && [ "$pinned_go" != "latest" ]; then
-    test "$(/usr/local/go/bin/go env GOVERSION)" = "go${pinned_go}"
+    test "$(/usr/local/bin/go env GOVERSION)" = "go${pinned_go}"
 fi
 if [ -n "$pinned_nvim" ] && [ "$pinned_nvim" != "latest" ]; then
-    /usr/local/bin/nvim --version | head -1 | grep -qF "v${pinned_nvim}"
+    su tester -c "fish -c 'nvim --version'" | head -1 | grep -qF "v${pinned_nvim}"
 fi
+if [ -n "$pinned_kubectl" ] && [ "$pinned_kubectl" != "latest" ]; then
+    su tester -c "fish -c 'kubectl version --client'" | grep -qF "v${pinned_kubectl}"
+fi
+# mise-managed CLI tools resolve through shims in a login shell
+su tester -c "fish -c 'kind --version'" | grep -q 'kind version'
+su tester -c "fish -c 'helm version --short'" | grep -q 'v'
 
 echo "UBUNTU 24.04: ALL ASSERTIONS PASSED"

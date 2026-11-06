@@ -14,87 +14,101 @@ That's the only entry point, for every supported distro (Ubuntu 24.04, Arch,
 Raspbian). `init.sh` installs curl (if missing) and chezmoi, points chezmoi at
 the checkout, and runs `chezmoi apply`. Everything else happens inside chezmoi:
 
-- `run_once_before_*` scripts (in `.chezmoiscripts/`) run **before** dotfiles
-  are written (system packages, Neovim + NvChad)
+- `run_once_before_*` scripts run **before** dotfiles are written (distro
+  packages, NvChad clone)
 - dotfiles are written (templates branch on the distro via `.osRelease`)
+- `run_after_05_mise.sh` installs the mise-managed tools (runs on every apply,
+  ~20ms no-op) and links selected ones into `/usr/local/bin`
 - `run_once_after_*` scripts run **after** (TPM, Fisher, plugin syncs,
   Claude Code, Happier, Raspbian VPNs)
-- `run_onchange_*` scripts run when their content changes (Go toolchain,
-  login shell); both self-skip fast when already up to date
+- `run_once_*` scripts re-run when their content changes (login shell)
 
 | Script | What |
 |--------|------|
-| `run_once_before_00_packages.sh` | fish, tmux, fzf, powerline, kitty-terminfo (apt / pacman; lighter set on Raspbian) |
-| `run_once_before_10_neovim.sh` | latest Neovim (GitHub build on Ubuntu, pacman on Arch) + NvChad v2.0 |
+| `run_once_before_00_packages.sh.tmpl` | distro packages from `software.yaml` (apt / pacman; lighter set on Raspbian) |
+| `run_once_before_20_nvchad.sh` | NvChad v2.0 base (Neovim itself comes from mise) |
+| `run_after_05_mise.sh.tmpl` | `mise install` + global symlinks for `global_tools` |
 | `run_once_after_00_tmux.sh` | TPM + tmux plugins |
 | `run_once_after_10_fish.sh` | Fisher + fish plugins |
 | `run_once_after_20_nvim_plugins.sh` | headless `Lazy! sync` |
 | `run_once_after_30_claude.sh` | Claude Code |
 | `run_once_after_40_happier.sh` | Happier |
 | `run_once_after_50_vpn.sh` | Tailscale + NordVPN (Raspbian only) |
-| `run_onchange_50_go.sh` | latest Go: tarball+sha256 on Ubuntu, pacman on Arch |
 | `run_onchange_55_shell.sh` | fish as login shell |
 
 Re-running `init.sh` (or `chezmoi apply`) is always safe: `run_once` scripts
-re-run only when their content changes, and the `run_onchange` scripts skip
-themselves when up to date.
+re-run only when their content changes, and the mise hook reconciles state.
 
 ## Declarative software
 
 Everything installed is described in one file, `.chezmoidata/software.yaml`:
 
 ```yaml
-software:
-  go:
-    version: "1.27.3"
-    sha256:
-      amd64: "65efbc80..."
-      arm64: "a06e9930..."
-  neovim:
-    version: "0.12.6"
+mise:
+  install_mode: hybrid          # user | hybrid | all
+  global_tools: [go]            # symlinked into /usr/local/bin (hybrid)
+  global_link_dir: /usr/local/bin
+  tools:
+    go: "1.27.3"
+    neovim: "0.12.6"
+    fzf: "0.74.5"
+    kubectl: "1.37.2"
+    kind: "0.33.0"
+    helm: "4.3.1"
+    kubectx: "0.11.0"           # also provides kubens
+    oh-my-posh: "31.3.0"
+    uv: "0.12.23"
+    "aqua:cilium/cilium-cli": "0.20.2"
 
 packages:
-  debian:   [fish, tmux, git, curl, fzf, powerline, direnv, kitty-terminfo]
-  arch:     [fish, tmux, git, curl, fzf, powerline, kitty-terminfo, neovim, direnv]
+  debian:   [fish, tmux, git, curl, powerline, direnv, kitty-terminfo]
+  arch:     [fish, tmux, git, curl, powerline, kitty-terminfo, direnv]
   raspbian: [fish, tmux, vim, git, curl, fzf, direnv]
 ```
 
-The hooks are chezmoi templates (`run_*.sh.tmpl`), so this file is rendered
-into each hook before it runs. Changing a value changes that hook's content
-hash, which makes chezmoi re-run exactly that hook on the next `chezmoi apply`
-and nothing else - declarative versioning with no extra tooling:
+**Which list a tool belongs in.** Distro packages when the tool needs system
+integration (login shell, terminfo, daemons, PAM, `/etc` files), sits in a
+prompt hot path, or is a security primitive whose distro backports matter
+(git, curl). Everything else that ships release binaries goes to mise. A tool
+may appear in only one list; CI enforces that for debian and arch.
+
+**How tools are exposed** (`mise.install_mode`):
+
+| mode | behaviour |
+|---|---|
+| `user` | tools live in `~/.local/share/mise`, reachable through mise shims only |
+| `hybrid` (default) | as `user`, plus tools in `global_tools` are symlinked as real binaries into `global_link_dir` |
+| `all` | every mise tool is symlinked into `global_link_dir` |
+
+In `hybrid` mode `/usr/local/bin/go` points straight at the versioned binary,
+so scripts, systemd, `sudo` and GUI-launched editors see Go with no shim
+overhead. Switching modes is a one-line edit in the data file; the next apply
+re-runs the hook and links (or stops linking) accordingly.
+
+mise's own `install --system` is deliberately not used: `core:go` rejects it
+("automatic system installation currently supports binary-download backends
+only" on mise 2026.11.2), and symlinking the user-store binary gives the same
+global visibility without needing `/etc/mise/config.toml`.
+
+**Bumping a version** is a data edit:
 
 ```bash
-$EDITOR .chezmoidata/software.yaml   # bump go: "1.28.0" (and its sha256)
-chezmoi apply                        # only the Go hook re-runs
+$EDITOR .chezmoidata/software.yaml   # go: "1.27.3" -> "1.28.0"
+chezmoi apply                        # renders config.toml, installs, re-links
 ```
 
-`version: "latest"` opts a tool back into tracking upstream instead of pinning.
-
-Limits worth knowing:
-
-- **Arch** package versions are not pinned: pacman follows the rolling repos, so
-  `packages.arch` is a list, not a lockfile. Exact pinning there needs an AUR
-  snapshot, mise, or Nix.
-- Go's `sha256` is per architecture: update both when bumping, or leave an entry
-  empty and the digest is looked up from go.dev's release feed.
-- Distro packages install whatever the repo currently ships; only the
-  upstream-fetched tools (Go, Neovim) carry exact versions.
-
-For fully declarative *system* management (every package and version locked,
-plus rollbacks), the tool for that is Nix + Home Manager on top of this repo -
-chezmoi would then only manage the few files Nix does not.
+`version: "latest"` opts a single tool back into tracking upstream.
 
 ## Distro differences
 
 Handled inside the scripts/templates, no per-distro bootstrap needed:
 
-- **Ubuntu/Debian**: Neovim from the pinned GitHub release (apt's is ancient),
-  Go from the official tarball at the pinned version with sha256 verification
-- **Arch**: pacman for everything (tracks upstream closely)
+- **Ubuntu/Debian**: mise provides Neovim, fzf and the CLI tools (apt's are old)
+- **Arch**: same, because mise owns those tools on both distros; pacman only
+  installs the system-integrated set
 - **Raspbian**: lighter package set (vim, no powerline), minimal fish config
   (old fish), `dot_vimrc` deployed via a templated `.chezmoiignore` rule,
-  no NvChad/Go/Claude/Happier
+  no NvChad/mise/Claude/Happier
 
 ## What's included
 
@@ -115,36 +129,54 @@ Rust (rustaceanvim, crates.nvim, rust.vim), Go (go.nvim, gopls), Copilot, codeco
 
 ## Updating
 
-Two separate things, on purpose:
+**Changing what is installed, or which version** - edit
+`.chezmoidata/software.yaml` and run `chezmoi apply`. It renders
+`~/.config/mise/config.toml`, installs or removes tools, and re-links the
+global symlinks. Versions are pins, not drift: nothing moves unless you change
+a pin (or declare `"latest"` for a tool).
 
-**Changing what is installed / which version** - edit
-`.chezmoidata/software.yaml` and `chezmoi apply`. Only the affected hook re-runs
-(its rendered content changed).
-
-**Re-running the hooks at the current pins** - `./update.sh` re-checks Go and
-updates the plugin tooling (NvChad, tmux, fisher, Lazy). Installed toolchains
-stay at their declared versions:
+**Refreshing mise, plugins and helper tooling** - `./update.sh`:
 
 ```bash
-./update.sh            # Go re-check, NvChad, tmux/fish/nvim plugins
+./update.sh            # mise self-update + upgrade + lockfile + plugin updates
 ./update.sh --system   # also apt upgrade / pacman -Syu
 ```
 
-`chezmoi apply` alone never re-runs an already-executed hook: chezmoi keys
-`run_once_*` / `run_onchange_*` on the content hash, so an unchanged (rendered)
-hook is skipped. `update.sh` re-runs them explicitly, and each self-checks
-first, so it is safe and fast when current (Go re-check ~0.4s).
-
 | Component | Update |
 |-----------|--------|
-| Go | bump `software.go.version` + sha256, `chezmoi apply` (or `./update.sh` to re-check the current pin) |
-| Neovim | bump `software.neovim.version`, `chezmoi apply` |
-| NvChad | `git -C ~/.config/nvim pull --ff-only`, also done by `./update.sh` |
+| mise itself | `mise self-update` (run by `./update.sh`) |
+| go, neovim, fzf, kubectl, kind, helm, kubectx, oh-my-posh, uv, cilium | bump the pin in `software.yaml`, then `chezmoi apply` |
+| NvChad | `git -C ~/.config/nvim pull --ff-only` (also `./update.sh`) |
 | nvim plugins | `nvim --headless "+Lazy! update" +qa` |
 | tmux plugins | `~/.tmux/plugins/tpm/bin/update_plugins all`, then `prefix + I` |
 | fish plugins | `fish -c 'fisher update'` |
 | system packages | `sudo apt-get update && sudo apt-get upgrade` / `sudo pacman -Syu` |
 | Claude Code | self-updates in place |
+
+### Lockfile
+
+`~/.config/mise/mise.lock` is generated by `mise lock --global` and is
+machine-local, not managed by chezmoi (managing it would cause permanent drift
+after every regeneration).
+
+- Regenerate: `mise lock --global`, also run by `./update.sh`
+- Used automatically by `mise install`; `mise install --locked` fails if an
+  artifact is not in the lockfile
+- It adds per-platform sha256 and download URLs. Exact versions already come
+  from `config.toml`, so losing it costs checksum reproducibility, not pins.
+
+### One owner per tool
+
+A tool lives in `packages:` or in `mise.tools:`, never both; CI enforces that
+for debian and arch. When a tool moves to mise, remove the hand-installed copy
+so two versions cannot shadow each other:
+
+```bash
+type -p kubectl kind helm cilium uv oh-my-posh   # should be mise or /usr/local/bin
+rm ~/.local/bin/kubectl ~/.local/bin/kind         # after checking each one
+```
+
+The mise hook warns about any legacy copy it finds on `PATH`.
 
 To force **unchanged** hooks to re-run (blunt tool: also resets chezmoi's record
 of which files were last written, so unmanaged local edits can be overwritten
@@ -166,18 +198,20 @@ dotfiles/
 ├── init.sh                          # Only entry point: chezmoi + apply
 ├── update.sh                        # Re-run hooks: toolchains + plugins
 ├── .chezmoidata/
-│   └── software.yaml                # Declarative: packages + pinned versions
+│   └── software.yaml                # Declarative: mise tools + distro packages
 ├── .chezmoiscripts/                 # All run_* hooks (chezmoi executes them;
 │   │                                # not written to $HOME); *.tmpl render from
 │   │                                # .chezmoidata/software.yaml
-│   ├── run_once_before_*.sh[.tmpl]  # System packages, Neovim, NvChad
+│   ├── run_once_before_*.sh[.tmpl]  # distro packages, NvChad clone
+│   ├── run_after_05_mise.sh.tmpl    # mise install + global symlinks
 │   ├── run_once_after_*.sh          # TPM, Fisher, nvim plugins, Claude, Happier, VPNs
-│   └── run_onchange_*.sh[.tmpl]     # Go toolchain, login shell
+│   └── run_onchange_*.sh            # login shell
 ├── dot_tmux.conf                    # ~/.tmux.conf
 ├── dot_tmux.conf.common             # ~/.tmux.conf.common
 ├── dot_vimrc                        # ~/.vimrc (Raspbian only, via .chezmoiignore)
 ├── private_dot_config/
 │   ├── kitty/                       # ~/.config/kitty/
+│   ├── mise/config.toml.tmpl        # ~/.config/mise/config.toml (rendered [tools])
 │   ├── nvim/lua/custom/             # ~/.config/nvim/lua/custom/ (NvChad customizations)
 │   └── private_fish/                # ~/.config/fish/ (config.fish is a template)
 ├── private_dot_ssh/

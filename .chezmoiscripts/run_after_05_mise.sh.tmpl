@@ -1,0 +1,97 @@
+#!/bin/bash
+# Installs the mise-managed tools declared in .chezmoidata/software.yaml and
+# optionally links them into a system PATH directory as real binaries.
+# Runs on every apply (run_after_), after ~/.config/mise/config.toml is written,
+# and before the run_once_after_* plugin bootstraps. Idempotent: a no-op costs
+# about 20ms when everything is current.
+set -euo pipefail
+log()  { echo "==> [mise] $*"; }
+warn() { echo "WARNING: [mise] $*" >&2; }
+
+INSTALL_MODE="{{ .mise.install_mode }}"
+GLOBAL_TOOLS="{{ join " " .mise.global_tools }}"
+LINK_DIR="{{ .mise.global_link_dir }}"
+ALL_TOOLS="{{ range $name, $_ := .mise.tools }}{{ $name }} {{ end }}"
+
+# Raspbian: vim-only setup, no mise-managed tools there.
+if [ -r /etc/os-release ]; then
+    # shellcheck source=/etc/os-release
+    . /etc/os-release
+    case "${ID:-}" in
+        raspbian|raspios) log "Raspbian: mise tools skipped"; exit 0 ;;
+    esac
+fi
+
+# mise itself stays user-local, so updating it never needs sudo.
+if ! command -v mise >/dev/null 2>&1 && [ ! -x "$HOME/.local/bin/mise" ]; then
+    log "Installing mise"
+    sh -c "$(curl -fsSL https://mise.run)"
+fi
+MISE="$(command -v mise 2>/dev/null || true)"
+[ -n "$MISE" ] || MISE="$HOME/.local/bin/mise"
+if [ ! -x "$MISE" ]; then
+    warn "mise is not available and could not be installed"
+    exit 1
+fi
+
+# Symlink a tool's real binaries into LINK_DIR. No shims: zero per-invocation
+# cost, and the binaries work for root, systemd and non-fish shells.
+link_tool() {
+    local tool="$1" dir src file dest
+    dir="$("$MISE" where "$tool" 2>/dev/null || true)"
+    if [ -z "$dir" ] || [ ! -d "$dir" ]; then
+        warn "cannot resolve install dir for ${tool}; not linked globally"
+        return 0
+    fi
+    if [ -d "$dir/bin" ]; then src="$dir/bin"; else src="$dir"; fi
+    for file in "$src"/*; do
+        if [ ! -f "$file" ] || [ ! -x "$file" ]; then
+            continue
+        fi
+        dest="${LINK_DIR}/$(basename "$file")"
+        if [ "$(readlink -f "$dest" 2>/dev/null || true)" = "$(readlink -f "$file")" ]; then
+            continue
+        fi
+        if sudo ln -sf "$file" "$dest"; then
+            log "linked $(basename "$file") -> ${LINK_DIR}"
+        else
+            warn "could not link $(basename "$file") into ${LINK_DIR}"
+        fi
+    done
+}
+
+log "Installing tools"
+"$MISE" install --yes
+
+case "$INSTALL_MODE" in
+    user)
+        ;;
+    hybrid)
+        for tool in $GLOBAL_TOOLS; do
+            link_tool "$tool"
+        done
+        ;;
+    all)
+        for tool in $ALL_TOOLS; do
+            link_tool "$tool"
+        done
+        ;;
+    *)
+        warn "unknown mise.install_mode '${INSTALL_MODE}' (user|hybrid|all)"
+        exit 1
+        ;;
+esac
+
+# Legacy copies installed by hand or by an old hook would now duplicate what
+# mise provides; point them out instead of silently removing user files.
+for tool in $ALL_TOOLS; do
+    case "$tool" in *:*) continue ;; esac
+    found="$(type -P "$tool" 2>/dev/null || true)"
+    case "$found" in
+        ""|"$HOME/.local/share/mise/"*|"$LINK_DIR/"*|/usr/bin/*|/bin/*)
+            ;;
+        *) warn "legacy ${tool} at ${found} (remove it to avoid two versions)" ;;
+    esac
+done
+
+log "up to date"

@@ -4,6 +4,13 @@
 set -euo pipefail
 log() { echo "==> [nvim-plugins] $*"; }
 
+# mise-managed nvim lives behind shims, which a non-interactive shell (this
+# hook runs under) does not get from the fish config.
+if [ -d "$HOME/.local/share/mise/shims" ]; then
+    PATH="$HOME/.local/share/mise/shims:$PATH"
+    export PATH
+fi
+
 if ! command -v nvim >/dev/null 2>&1; then
     log "nvim not installed, skipping"
     exit 0

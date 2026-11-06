@@ -1,27 +1,55 @@
 # Declarative software definition: single source of truth for what gets
 # installed and at which version.
 #
-# The hooks in .chezmoiscripts/ are templates, so these values are baked into
-# each script's rendered content. That means:
-#   - change a version or package here, run `chezmoi apply`
-#   - only the affected hook re-runs (its content hash changed)
-#   - nothing else is touched
+# Two lists, and (except for Raspbian's legacy set) a tool appears in at most
+# one of them. CI enforces that for debian and arch.
 #
-# Version values: an exact version ("1.27.3") pins it; "latest" tracks upstream.
+#   packages:  distro package manager (apt/pacman)
+#   mise:      mise-managed tools (release artifacts, pinned versions)
+#
+# Put a tool under packages: when it needs system integration (login shell,
+# terminfo, daemons, PAM, /etc files), sits in a prompt hot path, or is a
+# security primitive whose distro backports matter (git, curl).
+# Everything else that ships release binaries belongs under mise:.
 
-software:
-  go:
-    version: "1.27.3"
-    # sha256 of the official go.dev tarballs, per architecture.
-    # Pinned so an older pin can still be verified after go.dev's release feed
-    # moves on. Leave an entry empty to look the digest up from the feed.
-    sha256:
-      amd64: "65efbc80fdc1fa2cd2631cad5b481777a68e8725f34e89f50fc6ac714e379b40"
-      arm64: "a06e99309dbcbdca1a8ccd2282c3ee146e55930886e26b4f1193269587165f49"
-  neovim:
-    # Installed from GitHub releases on Ubuntu (apt's is ancient); on Arch the
-    # pacman package is used instead and follows the distro.
-    version: "0.12.6"
+mise:
+  # How mise-managed tools are exposed. One-line switch:
+  #   user    -> all tools live in ~/.local/share/mise, reached via shims only
+  #   hybrid  -> tools named in global_tools are ALSO symlinked as real
+  #              binaries into global_link_dir (no shim overhead, visible to
+  #              scripts, systemd, sudo and GUI apps); the rest stay shim-only
+  #   all     -> every mise tool is symlinked into global_link_dir
+  #
+  # Note: mise's own `install --system` is intentionally not used. core:go
+  # rejects it ("automatic system installation currently supports
+  # binary-download backends only" on mise 2026.11.2), and symlinking the
+  # user-store binaries gives the same global visibility without needing
+  # /etc/mise/config.toml.
+  install_mode: hybrid
+
+  # hybrid only: tools symlinked into global_link_dir. These are the ones
+  # invoked from build scripts, editors, CI helpers and other contexts that
+  # never see mise's shims.
+  global_tools:
+    - go
+
+  # Where the global symlinks are written (must be on the default PATH).
+  global_link_dir: /usr/local/bin
+
+  # Pinned tool versions. "latest" tracks upstream for a single tool.
+  # Backend-prefixed keys are allowed when a tool is not in mise's named
+  # registry (e.g. "aqua:cilium/cilium-cli", which ships a `cilium` binary).
+  tools:
+    go: "1.27.3"
+    neovim: "0.12.6"
+    fzf: "0.74.5"
+    kubectl: "1.37.2"
+    kind: "0.33.0"
+    helm: "4.3.1"
+    kubectx: "0.11.0"   # also provides kubens
+    oh-my-posh: "31.3.0"
+    uv: "0.12.23"
+    "aqua:cilium/cilium-cli": "0.20.2"
 
 packages:
   # apt-get list (Ubuntu, Debian and derivatives)
@@ -30,22 +58,19 @@ packages:
     - tmux
     - git
     - curl
-    - fzf
     - powerline
     - direnv
     - kitty-terminfo
-  # pacman list (Arch; neovim comes from here too)
+  # pacman list (Arch)
   arch:
     - fish
     - tmux
     - git
     - curl
-    - fzf
     - powerline
     - kitty-terminfo
-    - neovim
     - direnv
-  # Raspbian: lighter, vim-only setup
+  # Raspbian: lighter, vim-only setup (no mise-managed tools there)
   raspbian:
     - fish
     - tmux
@@ -54,3 +79,8 @@ packages:
     - curl
     - fzf
     - direnv
+#
+# Deliberately NOT declared: docker. It comes from Docker's own apt repository
+# (docker-ce, containerd.io, buildx/compose plugins, a systemd service and the
+# docker group). Installing distro `docker.io` here would replace that setup,
+# and mise cannot manage a daemon.

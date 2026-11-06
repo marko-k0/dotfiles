@@ -41,6 +41,25 @@ jobs:
             echo "ERROR: unrendered template action in hook output" >&2; exit 1
           fi
           shellcheck -x /tmp/rendered/*.sh
+      - name: Render mise config, validate TOML, assert one owner per tool
+        run: |
+          chezmoi execute-template --source . \
+            < private_dot_config/mise/config.toml.tmpl > /tmp/mise.toml
+          python3 -c 'import tomllib; d = tomllib.load(open("/tmp/mise.toml","rb")); print("mise tools:", len(d["tools"]))'
+          # A tool must not be installed by both the distro and mise. Raspbian
+          # is exempt: it is the legacy vim-only set and runs no mise tools.
+          tools_section="$(sed -n '/^  tools:/,/^[a-z]/p' .chezmoidata/software.yaml)"
+          for distro in debian arch; do
+            pkgs="$(sed -n "/^  ${distro}:/,/^  [a-z]/p" .chezmoidata/software.yaml \
+              | grep -E '^    - ' | sed 's/^    - //')"
+            for pkg in $pkgs; do
+              if printf '%s\n' "$tools_section" | grep -qE "^    \"?${pkg}\"?:"; then
+                echo "ERROR: ${pkg} is declared in both packages.${distro} and mise.tools" >&2
+                exit 1
+              fi
+            done
+          done
+          echo "one owner per tool: OK"
       - name: Render fish config for each distro branch and parse-check
         run: |
           # Default (this runner): Ubuntu branch
