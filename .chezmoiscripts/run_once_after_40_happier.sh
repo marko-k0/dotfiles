@@ -4,6 +4,12 @@
 set -euo pipefail
 log() { echo "==> [happier] $*"; }
 
+# Same reasoning as the Claude script: avoid network-flaky installers in CI.
+if [ -n "${DOTFILES_CI:-}" ]; then
+    log "CI environment detected, skipping"
+    exit 0
+fi
+
 os_id=""
 if [ -r /etc/os-release ]; then
     # shellcheck source=/etc/os-release

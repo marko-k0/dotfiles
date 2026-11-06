@@ -4,6 +4,13 @@
 set -euo pipefail
 log() { echo "==> [claude] $*"; }
 
+# downloads.claude.ai 403s datacenter IPs (CI runners), so skip there.
+# The installer also wants an interactive terminal on some setups.
+if [ -n "${DOTFILES_CI:-}" ]; then
+    log "CI environment detected, skipping"
+    exit 0
+fi
+
 os_id=""
 if [ -r /etc/os-release ]; then
     # shellcheck source=/etc/os-release

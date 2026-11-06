@@ -125,6 +125,8 @@ install_go_tarball() {
     # Best-effort PATH hook for POSIX shells; fish adds /usr/local/go/bin
     # separately via config.fish.
     if [ -f "$HOME/.profile" ] && ! grep -qs '/usr/local/go/bin' "$HOME/.profile"; then
+        # SC2016 is intended: $PATH must expand at shell-login time, not now
+        # shellcheck disable=SC2016
         printf '\nexport PATH=$PATH:/usr/local/go/bin\n' >> "$HOME/.profile"
         info "Added /usr/local/go/bin to ~/.profile"
     fi

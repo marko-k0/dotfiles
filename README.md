@@ -113,3 +113,30 @@ chezmoi edit ~/.tmux.conf
 # Render a template as chezmoi would (for testing)
 chezmoi execute-template < private_dot_config/private_fish/config.fish.tmpl
 ```
+
+## CI
+
+GitHub Actions runs on every push/PR (plus a weekly scheduled run to catch
+upstream breakage: new tool versions, URL rot):
+
+- **lint** — shellcheck on all scripts, plus template render checks: the fish
+  config is rendered for both the Ubuntu and Raspbian branches and parse-checked
+  with `fish -n`, and `.chezmoiignore` is verified to deploy `.vimrc` only on
+  Raspbian
+- **ubuntu-2404 / archlinux** — full end-to-end: the exact `init.sh` a fresh
+  machine would run, inside the official `ubuntu:24.04` / `archlinux:base-devel`
+  containers, then assertions on the installed state (Go version, fish, nvim,
+  direnv, tmux, NvChad, fish parse + startup)
+
+Claude Code and Happier installers are skipped in CI (`DOTFILES_CI=1`):
+claude.ai serves HTTP 403 to datacenter IPs, so that install can only be
+verified on a real machine.
+
+To run the same tests locally:
+
+```bash
+docker run --rm --network host -e DOTFILES_CI=1 -v "$PWD":/repo -w /repo \
+  ubuntu:24.04 bash /repo/.github/test/ubuntu.sh
+docker run --rm --network host -e DOTFILES_CI=1 -v "$PWD":/repo -w /repo \
+  archlinux:base-devel bash /repo/.github/test/arch.sh
+```

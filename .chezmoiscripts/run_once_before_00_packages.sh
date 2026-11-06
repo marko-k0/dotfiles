@@ -4,6 +4,7 @@
 # - Ubuntu/Debian: apt
 # - Arch: pacman (also provides neovim)
 # - Raspbian: same apt path, lighter set (vim instead of nvim, no powerline)
+# - direnv: config.fish sources its hook on every startup
 set -euo pipefail
 log() { echo "==> [packages] $*"; }
 
@@ -19,16 +20,18 @@ if command -v apt-get >/dev/null 2>&1; then
         raspbian|raspios)
             log "Installing system packages (apt, Raspbian set)"
             sudo apt-get update -qq
-            sudo apt-get install -y fish tmux vim git curl fzf
+            sudo apt-get install -y fish tmux vim git curl fzf direnv
             ;;
         *)
             log "Installing system packages (apt)"
             sudo apt-get update -qq
-            PKGS="fish tmux git curl fzf powerline"
+            PKGS="fish tmux git curl fzf powerline direnv"
             if apt-cache show kitty-terminfo >/dev/null 2>&1; then
+                # shellcheck disable=SC2086  # PKGS is a controlled word list
                 sudo apt-get install -y $PKGS kitty-terminfo
             else
                 # kitty-terminfo may not be packaged (e.g. some Debian derivatives)
+                # shellcheck disable=SC2086
                 sudo apt-get install -y $PKGS
             fi
             ;;
@@ -40,7 +43,7 @@ if command -v apt-get >/dev/null 2>&1; then
 elif command -v pacman >/dev/null 2>&1; then
     log "Installing system packages (pacman)"
     sudo pacman -Syu --noconfirm --needed \
-        fish tmux git curl fzf powerline kitty-terminfo neovim
+        fish tmux git curl fzf powerline kitty-terminfo neovim direnv
 else
     echo "ERROR: [packages] unsupported package manager (need apt-get or pacman)" >&2
     exit 1
