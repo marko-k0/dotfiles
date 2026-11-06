@@ -7,9 +7,12 @@
 # it on the next apply.
 #
 # - Ubuntu/Debian: apt
-# - Arch: pacman (also provides neovim)
+# - Arch: pacman
 # - Raspbian: same apt path, lighter set (vim instead of nvim, no powerline)
 # - direnv: config.fish sources its hook on every startup
+#
+# Neovim, fzf and other versioned CLIs are NOT here: mise owns those (see
+# run_after_05_mise.sh), so no tool appears in both lists.
 set -euo pipefail
 log() { echo "==> [packages] $*"; }
 

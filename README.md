@@ -203,6 +203,21 @@ The mise hook warns about any legacy copy it finds on `PATH`.
 
 ### Migrating from the previous setup
 
+**If you already have a global mise config, merge it first.** This repo now
+manages `~/.config/mise/config.toml`, and `chezmoi apply` replaces that file
+when it exists and is unmanaged (no prompt, unlike files chezmoi wrote itself).
+Check before applying:
+
+```bash
+ls -l ~/.config/mise/                     # does config.toml already exist?
+mise ls                                   # what is installed
+```
+
+Any pin that only lives there (and is not in `.chezmoidata/software.yaml`) will
+be dropped from the config by the apply. Add it to the `mise.tools:` map first,
+then apply. Installed versions stay in `~/.local/share/mise` either way; it is
+the pins, not the binaries, that would be lost.
+
 Earlier versions of this repo installed Go into `/usr/local/go` and Neovim into
 `/opt/nvim-linux-*`, and CLI tools were hand-installed into `~/.local/bin`.
 mise owns those now, so remove the old copies after the first apply:
