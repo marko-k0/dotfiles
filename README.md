@@ -244,12 +244,14 @@ Then confirm the leftovers are gone and mise is in charge:
 
 ```bash
 ls -d /usr/local/go 2>/dev/null || echo "no system Go"
-readlink -f (command -v go)     # fish; bash: readlink -f "$(command -v go)"
+mise which go                    # real binary under ~/.local/share/mise/installs/
+command -v go                    # shim in fish, /usr/local/bin/go in bash/systemd
 ```
 
-The second line should point into `~/.local/share/mise/installs/go/...`
-(shim) or `/usr/local/bin/go` → the mise install (hybrid mode symlink), never
-`/usr/local/go/bin/go`.
+`command -v go` must not print `/usr/local/go/bin/go`: that path means an old
+toolchain is still earlier in `PATH` (typically from a stale `~/.profile` line).
+Note that `readlink -f` on a mise shim resolves to the mise *binary*, not to Go;
+use `mise which go` to see the actual toolchain.
 
 To force **unchanged** hooks to re-run (blunt tool: also resets chezmoi's record
 of which files were last written, so unmanaged local edits can be overwritten
