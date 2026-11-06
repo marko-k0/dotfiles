@@ -31,9 +31,27 @@ fi
 export PATH="$HOME/.local/bin:$PATH"
 
 # --- Point chezmoi at this checkout (supports worktrees) --------------------
+# Only the sourceDir key is replaced: other settings in an existing
+# chezmoi.toml ([data], [edit], [diff], ...) are preserved. The previous file
+# is kept as a backup the first time this points somewhere else.
 echo "==> Configuring chezmoi source: ${REPO_DIR}"
 mkdir -p "$HOME/.config/chezmoi"
-printf 'sourceDir = "%s"\n' "$REPO_DIR" > "$HOME/.config/chezmoi/chezmoi.toml"
+cfg="$HOME/.config/chezmoi/chezmoi.toml"
+if [ -f "$cfg" ]; then
+    if ! grep -qxF "sourceDir = \"${REPO_DIR}\"" "$cfg"; then
+        backup="${cfg}.bak-$(date +%Y%m%d-%H%M%S)"
+        cp "$cfg" "$backup"
+        echo "    previous config backed up to ${backup}"
+    fi
+    grep -vE '^[[:space:]]*sourceDir[[:space:]]*=' "$cfg" > "${cfg}.tmp"
+else
+    : > "${cfg}.tmp"
+fi
+{
+    printf 'sourceDir = "%s"\n' "$REPO_DIR"
+    cat "${cfg}.tmp"
+} > "$cfg"
+rm -f "${cfg}.tmp"
 
 # --- Apply: writes dotfiles, runs run_once_* setup scripts -----------------
 echo "==> Applying dotfiles and running setup scripts..."
