@@ -220,23 +220,36 @@ the pins, not the binaries, that would be lost.
 
 Earlier versions of this repo installed Go into `/usr/local/go` and Neovim into
 `/opt/nvim-linux-*`, and CLI tools were hand-installed into `~/.local/bin`.
-mise owns those now, so remove the old copies after the first apply:
+mise owns those now, so remove the old copies after the first apply.
+
+These lines work in both bash and fish. Avoid a bare `/opt/nvim-linux-*` glob in
+fish: an unmatched wildcard is a hard error there and aborts the **whole**
+command line, so the other removals would silently not run.
 
 ```bash
 # old Go toolchain, and the PATH line the old hook appended to ~/.profile
 sudo rm -rf /usr/local/go
 grep -n '/usr/local/go/bin' ~/.profile      # delete that line if present
 
-# old Neovim build
-sudo rm -rf /opt/nvim-linux-* /usr/local/bin/nvim
+# old Neovim build (find -exec works in both shells)
+sudo rm -rf /usr/local/bin/nvim
+sudo find /opt -maxdepth 1 -name 'nvim-linux-*' -exec rm -rf {} +
 
 # hand-installed CLIs now provided by mise
 type -p kubectl kind helm cilium uv oh-my-posh nvim fzf
-rm -f ~/.local/bin/{kubectl,kind,helm,cilium,uv,uvx,oh-my-posh}
+rm -f ~/.local/bin/{kubectl,kind,helm,cilium,uv,uvx,oh-my-posh,nvim}
 ```
 
-`~/.local/bin/nvim` is often a symlink into `~/.local/share/nvim-dist`; removing
-it leaves the mise shim in charge.
+Then confirm the leftovers are gone and mise is in charge:
+
+```bash
+ls -d /usr/local/go 2>/dev/null || echo "no system Go"
+readlink -f (command -v go)     # fish; bash: readlink -f "$(command -v go)"
+```
+
+The second line should point into `~/.local/share/mise/installs/go/...`
+(shim) or `/usr/local/bin/go` → the mise install (hybrid mode symlink), never
+`/usr/local/go/bin/go`.
 
 To force **unchanged** hooks to re-run (blunt tool: also resets chezmoi's record
 of which files were last written, so unmanaged local edits can be overwritten
