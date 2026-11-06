@@ -99,6 +99,18 @@ chezmoi apply                        # renders config.toml, installs, re-links
 
 `version: "latest"` opts a single tool back into tracking upstream.
 
+**Project-level pins still work, with one wrinkle.** mise resolves versions per
+directory, so a repo with its own `mise.toml` overrides the pinned version inside
+an interactive shell (fish activates the shims). The `/usr/local/bin` symlink,
+however, always points at the globally pinned binary, which is what scripts,
+systemd and `sudo` see. That split is intentional: interactive shells can switch
+versions, everything else gets a stable floor.
+
+**Not managed here:** `docker`. It comes from Docker's own apt repository
+(`docker-ce`, containerd, buildx and compose plugins) plus a daemon, a systemd
+unit and the `docker` group. Declaring distro `docker.io` would replace that
+setup, and mise cannot manage a daemon. It is left as a documented follow-up.
+
 ## Distro differences
 
 Handled inside the scripts/templates, no per-distro bootstrap needed:
@@ -178,6 +190,28 @@ rm ~/.local/bin/kubectl ~/.local/bin/kind         # after checking each one
 
 The mise hook warns about any legacy copy it finds on `PATH`.
 
+### Migrating from the previous setup
+
+Earlier versions of this repo installed Go into `/usr/local/go` and Neovim into
+`/opt/nvim-linux-*`, and CLI tools were hand-installed into `~/.local/bin`.
+mise owns those now, so remove the old copies after the first apply:
+
+```bash
+# old Go toolchain, and the PATH line the old hook appended to ~/.profile
+sudo rm -rf /usr/local/go
+grep -n '/usr/local/go/bin' ~/.profile      # delete that line if present
+
+# old Neovim build
+sudo rm -rf /opt/nvim-linux-* /usr/local/bin/nvim
+
+# hand-installed CLIs now provided by mise
+type -p kubectl kind helm cilium uv oh-my-posh nvim fzf
+rm -f ~/.local/bin/{kubectl,kind,helm,cilium,uv,uvx,oh-my-posh}
+```
+
+`~/.local/bin/nvim` is often a symlink into `~/.local/share/nvim-dist`; removing
+it leaves the mise shim in charge.
+
 To force **unchanged** hooks to re-run (blunt tool: also resets chezmoi's record
 of which files were last written, so unmanaged local edits can be overwritten
 without a prompt):
@@ -244,19 +278,45 @@ chezmoi edit ~/.tmux.conf
 chezmoi execute-template < private_dot_config/private_fish/config.fish.tmpl
 ```
 
+## Troubleshooting
+
+**`mise install` fails with `404` on `https://dl.google.com/go/...`, or uv's
+attestation check fails with `TUF repository load failed`.** Both point at the
+same cause: on networks whose IPv6 route to Google's CDN is broken, IPv4 works
+and every IPv6 request 404s. Prefer IPv4 in `/etc/gai.conf`:
+
+```bash
+echo 'precedence ::ffff:0:0/96 100' | sudo tee -a /etc/gai.conf
+```
+
+Check before adding it: Ubuntu ships that exact line **commented out**, so a
+`grep -q` guard matches the comment and silently does nothing. Anchor on
+`^precedence`. Delete the line again if the IPv6 route gets fixed. The CI
+container tests apply the same line, for the same reason (containers have their
+own `/etc`).
+
+**`command not found` for a mise tool in a non-interactive shell.** Only fish
+activates mise (via `config.fish`); plain `bash`/`sh` scripts need
+`mise exec -- <cmd>`, or the tool belongs in `global_tools` so `hybrid` mode
+symlinks it into `/usr/local/bin`.
+
 ## CI
 
 GitHub Actions runs on every push/PR (plus a weekly scheduled run to catch
 upstream breakage: new tool versions, URL rot):
 
-- **lint** — shellcheck on all scripts, plus template render checks: the fish
-  config is rendered for both the Ubuntu and Raspbian branches and parse-checked
-  with `fish -n`, and `.chezmoiignore` is verified to deploy `.vimrc` only on
-  Raspbian
+- **lint** — shellcheck on plain scripts and on rendered hook templates; renders
+  `~/.config/mise/config.toml` and validates it as TOML; asserts that no tool is
+  declared in both a distro package list and `mise.tools`; renders the fish
+  config for both the Ubuntu and Raspbian branches and parse-checks it with
+  `fish -n`; verifies `.chezmoiignore` deploys `.vimrc` only on Raspbian and
+  keeps `init.sh`/`update.sh` out of `$HOME`
 - **ubuntu-2404 / archlinux** — full end-to-end: the exact `init.sh` a fresh
   machine would run, inside the official `ubuntu:24.04` / `archlinux:base-devel`
-  containers, then assertions on the installed state (Go version, fish, nvim,
-  direnv, tmux, NvChad, fish parse + startup)
+  containers as an unprivileged user with sudo, then assertions on the installed
+  state: every mise tool at its pinned version, `/usr/local/bin/go` is a real
+  symlink (no shim), Neovim/kubectl/kind/helm resolve through shims in a login
+  shell, distro packages present, NvChad and the fish config parse and start
 
 Claude Code and Happier installers are skipped in CI (`DOTFILES_CI=1`):
 claude.ai serves HTTP 403 to datacenter IPs, so that install can only be

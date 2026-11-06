@@ -1,5 +1,6 @@
 #!/bin/bash
-# Tailscale + NordVPN (Raspbian devices only, as in the old init-raspbian.sh).
+# Tailscale + NordVPN (Raspbian devices only; the Pi is the one machine that
+# needs device-level VPN clients).
 # Runs via chezmoi AFTER dotfiles are written.
 set -euo pipefail
 log() { echo "==> [vpn] $*"; }

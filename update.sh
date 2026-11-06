@@ -1,16 +1,13 @@
 #!/bin/bash
-# Refresh everything the chezmoi hooks installed.
+# Refresh the tooling that chezmoi hooks install, plus the plugin managers.
 #
-# Why this exists: chezmoi only executes run_once_/run_onchange_ scripts when
-# their *contents* change, so upstream releases (Go, Neovim, plugins) are never
-# picked up by a plain `chezmoi apply`. Re-running the hooks directly is the
-# supported way to move forward.
-#
-# Every hook self-checks and exits fast when already current, so this is safe
-# to re-run at any time.
+# Version policy: dev tools (go, neovim, kubectl, ...) are pinned in
+# .chezmoidata/software.yaml. Bump the pin and run `chezmoi apply` to change a
+# version; this script does not float them. It refreshes mise itself, applies
+# any "latest" pins, regenerates the lockfile, and updates the plugin managers.
 #
 # Usage:
-#   ./update.sh            # toolchains and plugins
+#   ./update.sh            # mise, plugins, lockfile
 #   ./update.sh --system   # also upgrade distro packages (apt/pacman)
 set -euo pipefail
 
