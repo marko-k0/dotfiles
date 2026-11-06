@@ -6,6 +6,5 @@ LICENSE
 init.sh
 update.sh
 .config/fish/secrets.fish
-.config/nvim/lua/plugins/**
 {{ if ne .chezmoi.osRelease.id "raspbian" }}.vimrc
 {{ end }}
