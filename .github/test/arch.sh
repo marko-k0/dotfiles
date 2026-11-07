@@ -62,6 +62,15 @@ fish -n /home/tester/.config/fish/config.fish
 grep -q "mise activate fish" /home/tester/.config/fish/config.fish
 test -f /home/tester/.config/mise/config.toml
 test -f /home/tester/.tmux.conf
+# tmux <-> nvim navigation: the TPM plugin is declared in the managed config,
+# installed by the tmux hook, and the resulting config loads in tmux.
+grep -q "vim-tmux-navigator" /home/tester/.tmux.conf
+test -f /home/tester/.tmux/plugins/vim-tmux-navigator/vim-tmux-navigator.tmux
+su tester -c "tmux -L dotfiles-ci -f /home/tester/.tmux.conf new-session -d" || {
+    echo "ERROR: tmux config failed to load" >&2
+    exit 1
+}
+su tester -c "tmux -L dotfiles-ci kill-server" >/dev/null 2>&1 || true
 # Neovim: fully managed LazyVim config (nothing cloned)
 test -f /home/tester/.config/nvim/init.lua
 test -f /home/tester/.config/nvim/lua/config/lazy.lua

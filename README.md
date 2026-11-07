@@ -19,7 +19,10 @@ the checkout, and runs `chezmoi apply`. Everything else happens inside chezmoi:
 - dotfiles are written (templates branch on the distro via `.osRelease`)
 - `run_after_05_mise.sh` installs the mise-managed tools (runs on every apply,
   ~20ms no-op) and links selected ones into `/usr/local/bin`
-- `run_once_after_*` scripts run **after** (TPM, Fisher, plugin syncs,
+- `run_after_*` scripts run on **every** apply, after dotfiles: mise tools, and
+  TPM (`~60ms` no-op) so adding a `@plugin` line to `~/.tmux.conf` installs it
+  without touching any script
+- `run_once_after_*` scripts run **after** once (Fisher, plugin syncs,
   Claude Code, Happier, Raspbian VPNs)
 - `run_once_*` scripts re-run when their content changes (login shell)
 
@@ -28,7 +31,7 @@ the checkout, and runs `chezmoi apply`. Everything else happens inside chezmoi:
 | `run_once_before_00_packages.sh.tmpl` | distro packages from `software.yaml` (apt / pacman; lighter set on Raspbian) |
 | `run_once_before_20_lazyvim.sh` | migrate away from an old NvChad config (nothing is cloned; `~/.config/nvim` is fully managed) |
 | `run_after_05_mise.sh.tmpl` | `mise install` + global symlinks for `global_tools` |
-| `run_once_after_00_tmux.sh` | TPM + tmux plugins |
+| `run_after_00_tmux.sh` | TPM + tmux plugins, every apply (picks up new `@plugin` lines) |
 | `run_once_after_10_fish.sh` | Fisher + fish plugins |
 | `run_once_after_20_nvim_plugins.sh` | headless `Lazy! sync` |
 | `run_once_after_30_claude.sh` | Claude Code |
@@ -156,7 +159,7 @@ Handled inside the scripts/templates, no per-distro bootstrap needed:
 
 - **Fish shell** - Vi mode, Tide prompt, fzf integration, git aliases
 - **Neovim** - LazyVim with the gruvbox-material theme, LSP, Copilot, codecompanion, DAP debugging
-- **Tmux** - Powerline status bar, vim-style navigation, clipboard integration
+- **Tmux** - Powerline status bar, prefix + `<C-h/j/k/l>` navigation that also moves between Neovim splits, clipboard integration
 - **Kitty** - Gruvbox Dark Soft theme, custom tab bar
 
 ### Neovim plugins
@@ -164,7 +167,8 @@ Handled inside the scripts/templates, no per-distro bootstrap needed:
 Rust (rustaceanvim, crates.nvim), Go (gopls, goimports/gofumpt, delve),
 Docker/Kubernetes YAML/Helm/JSON (`lang.docker`, `lang.yaml`, `lang.helm`,
 `lang.json`), Copilot, codecompanion, Telescope, Aerial, Neogit, nvim-dap,
-maximize.nvim.
+maximize.nvim, and vim-tmux-navigator (seamless `<C-h/j/k/l>` between splits and
+tmux panes; the tmux half is a TPM plugin in `dot_tmux.conf`).
 
 Quality-of-life extras: `coding.mini-surround` (`gsa`/`gsd`/`gsr`), `editor.inc-rename`
 (live rename preview via `<leader>cr`), `editor.illuminate` (highlight other

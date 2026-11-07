@@ -1,6 +1,9 @@
 #!/bin/bash
 # TPM (Tmux Plugin Manager) + tmux plugins.
-# Runs via chezmoi AFTER dotfiles are written (~/.tmux.conf exists).
+# Runs via chezmoi AFTER dotfiles are written (~/.tmux.conf exists), on every
+# apply: the plugin list lives in the managed ~/.tmux.conf, so adding a plugin
+# there must install it without editing this script's content. Idempotent and
+# cheap (~60ms when everything is installed; TPM only clones what is missing).
 set -euo pipefail
 log() { echo "==> [tmux] $*"; }
 
