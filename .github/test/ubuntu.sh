@@ -73,6 +73,26 @@ if printf '%s\n' "$load_log" | grep -qE 'E5113|Error detected|Failed to load'; t
     printf '%s\n' "$load_log" >&2
     exit 1
 fi
+# A failed lazy.nvim clone must exit headless instead of blocking on getchar():
+# without a UI getchar() waits forever, which would stall `chezmoi apply`.
+nvim_bin="$(su tester -c "fish -c 'command -v nvim'")"
+rm -rf /tmp/nvim-hang
+mkdir -p /tmp/nvim-hang/bin /tmp/nvim-hang/data
+printf '#!/bin/sh\nexit 1\n' > /tmp/nvim-hang/bin/git
+chmod -R 777 /tmp/nvim-hang
+rc=0
+su tester -c "XDG_CONFIG_HOME=/home/tester/.config XDG_DATA_HOME=/tmp/nvim-hang/data \
+    PATH=/tmp/nvim-hang/bin:/usr/bin:/bin timeout 20 '$nvim_bin' --headless '+qa'" \
+    >/dev/null 2>&1 || rc=$?
+if [ "$rc" -eq 124 ]; then
+    echo "ERROR: nvim hung when lazy.nvim could not be cloned" >&2
+    exit 1
+fi
+if [ "$rc" -eq 0 ]; then
+    echo "ERROR: expected a non-zero exit when the lazy.nvim clone fails" >&2
+    exit 1
+fi
+echo "lazy.nvim clone failure exits cleanly (rc=${rc})"
 test -f /home/tester/.local/bin/chezmoi
 su tester -c "fish -c 'echo fish-runs'"
 

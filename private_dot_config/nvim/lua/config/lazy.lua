@@ -9,12 +9,21 @@ if not (vim.uv or vim.loop).fs_stat(lazypath) then
   local repo = "https://github.com/folke/lazy.nvim.git"
   local out = vim.fn.system({ "git", "clone", "--filter=blob:none", "--branch=stable", repo, lazypath })
   if vim.v.shell_error ~= 0 then
-    vim.api.nvim_echo({
+    -- Only wait for a keypress when someone is watching: getchar() blocks
+    -- forever under `nvim --headless`, which is how the chezmoi plugin hook
+    -- runs, so a failed clone would hang `chezmoi apply` instead of failing.
+    local interactive = #vim.api.nvim_list_uis() > 0
+    local lines = {
       { "Failed to clone lazy.nvim:\n", "ErrorMsg" },
       { out, "WarningMsg" },
-      { "\nPress any key to exit..." },
-    }, true, {})
-    vim.fn.getchar()
+    }
+    if interactive then
+      table.insert(lines, { "\nPress any key to exit..." })
+    end
+    vim.api.nvim_echo(lines, true, {})
+    if interactive then
+      vim.fn.getchar()
+    end
     os.exit(1)
   end
 end
