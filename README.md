@@ -143,8 +143,14 @@ Handled inside the scripts/templates, no per-distro bootstrap needed:
 
 ### Neovim plugins
 
-Rust (rustaceanvim, crates.nvim), Go (gopls, goimports/gofumpt, delve), Copilot,
-codecompanion, Telescope, Aerial, Neogit, nvim-dap, maximize.nvim
+Rust (rustaceanvim, crates.nvim), Go (gopls, goimports/gofumpt, delve),
+Docker/Kubernetes YAML/Helm/JSON (`lang.docker`, `lang.yaml`, `lang.helm`,
+`lang.json`), Copilot, codecompanion, Telescope, Aerial, Neogit, nvim-dap,
+maximize.nvim.
+
+Quality-of-life extras: `coding.mini-surround` (`gsa`/`gsd`/`gsr`), `editor.inc-rename`
+(live rename preview via `<leader>cr`), `editor.illuminate` (highlight other
+references) and `ui.treesitter-context` (sticky function/block header).
 
 The fuzzy finder is **telescope** with the ivy layout. `lua/config/options.lua`
 sets `vim.g.lazyvim_picker = "telescope"`; it must live there rather than in
