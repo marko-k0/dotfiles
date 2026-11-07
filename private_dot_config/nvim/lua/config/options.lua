@@ -2,7 +2,10 @@
 -- loaded after LazyVim's own config).
 local opt = vim.opt
 
-opt.relativenumber = true
+opt.number = true
+-- Absolute line numbers only: LazyVim enables relativenumber by default, this
+-- file is loaded after it, so the override sticks.
+opt.relativenumber = false
 opt.scrolloff = 8
 
 -- OSC 52 clipboard: copy/paste over ssh and inside tmux without xclip/xsel or
