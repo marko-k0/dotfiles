@@ -75,6 +75,14 @@ if printf '%s\n' "$load_log" | grep -qE 'E5113|Error detected|Failed to load'; t
     printf '%s\n' "$load_log" >&2
     exit 1
 fi
+# The picker must be telescope, not the v16 default (snacks.picker): that is
+# what makes every <leader>f* key use the telescope spec from lua/plugins.
+picker_log="$(su tester -c "nvim --headless '+lua local p = require([[lazyvim.util.pick]]).picker; print([[picker=]] .. (p and p.name or [[none]]))' +qa" 2>&1 || true)"
+if ! printf '%s\n' "$picker_log" | grep -q 'picker=telescope'; then
+    echo "ERROR: LazyVim picker is not telescope:" >&2
+    printf '%s\n' "$picker_log" >&2
+    exit 1
+fi
 test -f /home/tester/.local/bin/chezmoi
 pacman -Qi fish tmux >/dev/null
 su tester -c "fish -c 'echo fish-runs'"

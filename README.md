@@ -146,6 +146,15 @@ Handled inside the scripts/templates, no per-distro bootstrap needed:
 Rust (rustaceanvim, crates.nvim), Go (gopls, goimports/gofumpt, delve), Copilot,
 codecompanion, Telescope, Aerial, Neogit, nvim-dap, maximize.nvim
 
+The fuzzy finder is **telescope** with the ivy layout. `lua/config/options.lua`
+sets `vim.g.lazyvim_picker = "telescope"`; it must live there rather than in
+`init.lua`, because LazyVim's own `options.lua` (which sets `"auto"`) loads
+first and the choice has to be in place before the extras are resolved. Since
+LazyVim v16 the default is `snacks.picker`, and a telescope spec that is not
+selected that way gets installed but never registered (so keymaps would quietly
+use snacks). Remove that line, and the telescope spec in
+`lua/plugins/editor.lua`, to go back to snacks.
+
 The config is plain files managed by chezmoi (`init.lua`, `lua/config/*.lua`,
 `lua/plugins/*.lua`); there is no upstream starter clone. `lua/config/lazy.lua`
 clones lazy.nvim on first start, and the `run_once_after_20_nvim_plugins.sh` hook

@@ -2,6 +2,14 @@
 -- loaded after LazyVim's own config).
 local opt = vim.opt
 
+-- Fuzzy finder: telescope, matching the ivy setup in lua/plugins/editor.lua.
+-- This must be here, not in init.lua: LazyVim's own options.lua sets
+-- vim.g.lazyvim_picker = "auto" and is loaded first, and this file runs before
+-- the extras are resolved. v16 defaults to snacks.picker, so without this line
+-- telescope is installed but never registered and every <leader>f* key would
+-- open snacks instead.
+vim.g.lazyvim_picker = "telescope"
+
 opt.number = true
 -- Absolute line numbers only: LazyVim enables relativenumber by default, this
 -- file is loaded after it, so the override sticks.
