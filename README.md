@@ -15,7 +15,7 @@ Raspbian). `init.sh` installs curl (if missing) and chezmoi, points chezmoi at
 the checkout, and runs `chezmoi apply`. Everything else happens inside chezmoi:
 
 - `run_once_before_*` scripts run **before** dotfiles are written (distro
-  packages, NvChad clone)
+  packages, Neovim migration cleanup)
 - dotfiles are written (templates branch on the distro via `.osRelease`)
 - `run_after_05_mise.sh` installs the mise-managed tools (runs on every apply,
   ~20ms no-op) and links selected ones into `/usr/local/bin`
@@ -26,7 +26,7 @@ the checkout, and runs `chezmoi apply`. Everything else happens inside chezmoi:
 | Script | What |
 |--------|------|
 | `run_once_before_00_packages.sh.tmpl` | distro packages from `software.yaml` (apt / pacman; lighter set on Raspbian) |
-| `run_once_before_20_nvchad.sh` | NvChad v2.0 base (Neovim itself comes from mise) |
+| `run_once_before_20_lazyvim.sh` | migrate away from an old NvChad config (nothing is cloned; `~/.config/nvim` is fully managed) |
 | `run_after_05_mise.sh.tmpl` | `mise install` + global symlinks for `global_tools` |
 | `run_once_after_00_tmux.sh` | TPM + tmux plugins |
 | `run_once_after_10_fish.sh` | Fisher + fish plugins |
@@ -46,7 +46,8 @@ go version                              # pinned binary, symlinked as /usr/local
 mise ls                                 # tools and the pins they came from
 mise which nvim && nvim --version       # shim -> versioned install
 fish -c 'kubectl version --client'      # shims resolve inside fish (incl. fish -c)
-git -C ~/.config/nvim log -1 --oneline  # NvChad base present
+git -C ~/.config/nvim status                # config is chezmoi-managed (no clone)
+nvim --headless '+lua print(vim.g.colors_name)' +qa   # gruvbox-material (LazyVim)
 ./update.sh                             # should finish with "done: everything up to date"
 ```
 
@@ -131,24 +132,47 @@ Handled inside the scripts/templates, no per-distro bootstrap needed:
   installs the system-integrated set
 - **Raspbian**: lighter package set (vim, no powerline), minimal fish config
   (old fish), `dot_vimrc` deployed via a templated `.chezmoiignore` rule,
-  no NvChad/mise/Claude/Happier
+  no Neovim/mise/Claude/Happier
 
 ## What's included
 
 - **Fish shell** - Vi mode, Tide prompt, fzf integration, git aliases
-- **Neovim** - NvChad v2.0 with Gruvbox theme, LSP, Copilot, codecompanion, DAP debugging
+- **Neovim** - LazyVim with the gruvbox-material theme, LSP, Copilot, codecompanion, DAP debugging
 - **Tmux** - Powerline status bar, vim-style navigation, clipboard integration
 - **Kitty** - Gruvbox Dark Soft theme, custom tab bar
 
 ### Neovim plugins
 
-Rust (rustaceanvim, crates.nvim, rust.vim), Go (go.nvim, gopls), Copilot, codecompanion, Telescope, Aerial, Neogit, nvim-dap, maximize.nvim
+Rust (rustaceanvim, crates.nvim), Go (gopls, goimports/gofumpt, delve), Copilot,
+codecompanion, Telescope, Aerial, Neogit, nvim-dap, maximize.nvim
+
+The fuzzy finder is **telescope** with the ivy layout. `lua/config/options.lua`
+sets `vim.g.lazyvim_picker = "telescope"`; it must live there rather than in
+`init.lua`, because LazyVim's own `options.lua` (which sets `"auto"`) loads
+first and the choice has to be in place before the extras are resolved. Since
+LazyVim v16 the default is `snacks.picker`, and a telescope spec that is not
+selected that way gets installed but never registered (so keymaps would quietly
+use snacks). Remove that line, and the telescope spec in
+`lua/plugins/editor.lua`, to go back to snacks.
+
+Moving inside a picker (telescope defaults, nothing custom): typing filters,
+`<C-n>`/`<C-p>` move the selection, `j`/`k` work in normal mode, `<Tab>`/`<S-Tab>`
+multi-select.
+
+The config is plain files managed by chezmoi (`init.lua`, `lua/config/*.lua`,
+`lua/plugins/*.lua`); there is no upstream starter clone. `lua/config/lazy.lua`
+clones lazy.nvim on first start, and the `run_once_after_20_nvim_plugins.sh` hook
+runs a headless `Lazy! sync` so a fresh machine comes up with every plugin.
 
 ## Post-install
 
 - Log out and back in for fish shell to take effect
 - Run `tide configure` to set up the fish prompt
 - Set `OPENAI_API_KEY` environment variable for codecompanion.nvim
+- Start `nvim` once interactively: the headless plugin sync in the apply hook
+  installs LazyVim and the plugins, but Mason's tool downloads (LSP servers,
+  debug adapters) are background jobs that outlive that headless run. They
+  finish on the first interactive start, where Mason shows progress
 
 ## Updating
 
@@ -169,8 +193,7 @@ a pin (or declare `"latest"` for a tool).
 |-----------|--------|
 | mise itself | `mise self-update` (run by `./update.sh`) |
 | go, neovim, fzf, kubectl, kind, helm, kubectx, oh-my-posh, uv, cilium | bump the pin in `software.yaml`, then `chezmoi apply` |
-| NvChad | `git -C ~/.config/nvim pull --ff-only` (also `./update.sh`) |
-| nvim plugins | `nvim --headless "+Lazy! update" +qa` |
+| LazyVim + nvim plugins | `nvim --headless "+Lazy! update" +qa` (also `./update.sh`) |
 | tmux plugins | `~/.tmux/plugins/tpm/bin/update_plugins all`, then `prefix + I` |
 | fish plugins | `fish -c 'fisher update'` |
 | system packages | `sudo apt-get update && sudo apt-get upgrade` / `sudo pacman -Syu` |
@@ -187,6 +210,11 @@ after every regeneration).
   artifact is not in the lockfile
 - It adds per-platform sha256 and download URLs. Exact versions already come
   from `config.toml`, so losing it costs checksum reproducibility, not pins.
+
+`~/.config/nvim/lazy-lock.json` is the equivalent for Neovim: written by
+lazy.nvim on every sync/update, machine-local and likewise not managed by
+chezmoi. Commit-worthy if you ever want identical plugin revisions across
+machines; deleting it only means the next sync resolves plugins fresh.
 
 ### One owner per tool
 
@@ -266,6 +294,37 @@ chezmoi apply
 Editing a hook's content re-runs that hook on the next apply, which is the
 intended way to change what a hook does.
 
+### Migrating from NvChad to LazyVim
+
+Neovim's config used to be an NvChad clone with a small `lua/custom` layer. It is
+now plain chezmoi-managed files, so `~/.config/nvim` is no longer a git repo and
+the plugin set comes from LazyVim plus `lua/plugins/*.lua`.
+
+The first apply handles the switch automatically
+(`run_once_before_20_lazyvim.sh`):
+
+- an existing non-LazyVim `~/.config/nvim` is **moved** to
+  `~/.config/nvim.bak-<timestamp>` (never deleted)
+- NvChad leftovers in the data dir (`nvim/nvchad`, `lazy/base46`, `lazy/ui`,
+  `lazy/nvterm`, `lazy/nvim-colorizer.lua`) are moved to
+  `~/.local/share/nvim/pre-lazyvim-<timestamp>/`. This matters: a stale base46
+  cache is what makes NvChad configs fail with
+  `cannot open .../nvim/nvchad/base46/defaults`
+
+Behaviour changes worth knowing:
+
+| Before (NvChad) | Now (LazyVim) |
+|---|---|
+| `git -C ~/.config/nvim pull` | nothing to pull: `./update.sh` updates plugins |
+| nvim-tree (`<leader>e`) | LazyVim's explorer on the same key |
+| go.nvim | LazyVim's `lang.go` extra: gopls, goimports/gofumpt, delve, neotest |
+| rust.vim + rustfmt autosave | rustaceanvim + a `BufWritePre` rustfmt autocmd |
+| Gruvbox with transparency | gruvbox-material, transparent (`lua/plugins/theme.lua`) |
+| OSC 52 clipboard | same (`lua/config/options.lua`) |
+
+Old NvChad config still available for reference:
+`~/.config/nvim.bak-<timestamp>`. Delete it once you are happy.
+
 ## Repository structure
 
 ```
@@ -277,7 +336,7 @@ dotfiles/
 ├── .chezmoiscripts/                 # All run_* hooks (chezmoi executes them;
 │   │                                # not written to $HOME); *.tmpl render from
 │   │                                # .chezmoidata/software.yaml
-│   ├── run_once_before_*.sh[.tmpl]  # distro packages, NvChad clone
+│   ├── run_once_before_*.sh[.tmpl]  # distro packages, Neovim migration
 │   ├── run_after_05_mise.sh.tmpl    # mise install + global symlinks
 │   ├── run_once_after_*.sh          # TPM, Fisher, nvim plugins, Claude, Happier, VPNs
 │   └── run_onchange_*.sh            # login shell
@@ -287,7 +346,8 @@ dotfiles/
 ├── private_dot_config/
 │   ├── kitty/                       # ~/.config/kitty/
 │   ├── mise/config.toml.tmpl        # ~/.config/mise/config.toml (rendered [tools])
-│   ├── nvim/lua/custom/             # ~/.config/nvim/lua/custom/ (NvChad customizations)
+│   ├── nvim/                        # ~/.config/nvim/ (LazyVim: init.lua,
+│   │   │                            # lua/config/, lua/plugins/ - all managed)
 │   └── private_fish/                # ~/.config/fish/ (config.fish is a template)
 ├── private_dot_ssh/
 │   └── executable_rc                # ~/.ssh/rc (SSH agent forwarding)
@@ -341,6 +401,36 @@ activates mise (via `config.fish`); plain `bash`/`sh` scripts need
 `mise exec -- <cmd>`, or the tool belongs in `global_tools` so `hybrid` mode
 symlinks it into `/usr/local/bin`.
 
+**`rust-analyzer` loops or fails with `mise ERROR shim fallback recursion
+detected for rust-analyzer`.** This is mise's rust backend plus rustup, not a
+broken config here. mise installs Rust through rustup, and rustup ships a
+`rust-analyzer` *proxy* in `~/.cargo/bin` whether or not the toolchain has the
+component; mise also creates a shim for it. So the proxy reports `rust-analyzer
+is unavailable for the active toolchain`, falls back to `PATH`, finds mise's
+shim, which asks rustup again: a loop.
+
+The cause is a missing rustup component (`rust-analyzer` is not part of
+rustup's `minimal`/`default` profiles). Fix it in the toolchain:
+
+```bash
+rustup component add rust-analyzer          # add rust-src too for std source
+rust-analyzer --version                      # -> rust-analyzer 1.97.1 (8bab26f)
+```
+
+To make it permanent for a mise-managed Rust, declare the components instead of
+installing them by hand, so `mise install` re-adds them after a toolchain bump:
+
+```toml
+[tools]
+rust = { version = "1.97", components = ["rust-analyzer", "rust-src"] }
+```
+
+Notes: this repo does not pin Rust (it is a per-project concern, so put the
+snippet above in the project's `mise.toml` or add it to `software.yaml`), and a
+Rust toolchain is about 1.6 GB in `RUSTUP_HOME`. Excluding the shim
+(`mise settings shims.exclude=rust-analyzer`) only turns the loop into a clean
+`Unknown binary 'rust-analyzer'` error; it is not a fix.
+
 ## CI
 
 GitHub Actions runs on every push/PR (plus a weekly scheduled run to catch
@@ -357,7 +447,8 @@ upstream breakage: new tool versions, URL rot):
   containers as an unprivileged user with sudo, then assertions on the installed
   state: every mise tool at its pinned version, `/usr/local/bin/go` is a real
   symlink (no shim), Neovim/kubectl/kind/helm resolve through shims in a login
-  shell, distro packages present, NvChad and the fish config parse and start
+  shell, distro packages present, the LazyVim config loads with no startup
+  errors, the fish config parses and starts
 
 Claude Code and Happier installers are skipped in CI (`DOTFILES_CI=1`):
 claude.ai serves HTTP 403 to datacenter IPs, so that install can only be
