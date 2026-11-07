@@ -69,6 +69,11 @@ test -f /home/tester/.config/nvim/lua/plugins/theme.lua
 # lazy.nvim sync actually installed LazyVim and the theme
 test -d /home/tester/.local/share/nvim/lazy/LazyVim
 test -d /home/tester/.local/share/nvim/lazy/gruvbox-material
+# one representative plugin per extra added in this branch
+for p in mini.surround inc-rename.nvim vim-illuminate nvim-treesitter-context \
+    SchemaStore.nvim helm-ls.nvim; do
+    test -d "/home/tester/.local/share/nvim/lazy/$p"
+done
 # the config loads without startup errors
 load_log="$(su tester -c "nvim --headless '+lua vim.print(\"nvim-ok\")' +qa" 2>&1 || true)"
 printf '%s\n' "$load_log" | grep -q 'nvim-ok'
