@@ -68,13 +68,20 @@ test -f /home/tester/.config/nvim/lua/config/lazy.lua
 test -f /home/tester/.config/nvim/lua/plugins/theme.lua
 # lazy.nvim sync actually installed LazyVim and the theme
 test -d /home/tester/.local/share/nvim/lazy/LazyVim
-test -d /home/tester/.local/share/nvim/lazy/gruvbox.nvim
+test -d /home/tester/.local/share/nvim/lazy/gruvbox-material
 # the config loads without startup errors
 load_log="$(su tester -c "nvim --headless '+lua vim.print(\"nvim-ok\")' +qa" 2>&1 || true)"
 printf '%s\n' "$load_log" | grep -q 'nvim-ok'
 if printf '%s\n' "$load_log" | grep -qE 'E5113|Error detected|Failed to load'; then
     echo "ERROR: Neovim config failed to load:" >&2
     printf '%s\n' "$load_log" >&2
+    exit 1
+fi
+# the managed theme must actually be the active one
+theme_log="$(su tester -c "nvim --headless '+lua print([[colors=]] .. tostring(vim.g.colors_name))' +qa" 2>&1 || true)"
+if ! printf '%s\n' "$theme_log" | grep -q 'colors=gruvbox-material'; then
+    echo "ERROR: active colorscheme is not gruvbox-material:" >&2
+    printf '%s\n' "$theme_log" >&2
     exit 1
 fi
 # The picker must be telescope, not the v16 default (snacks.picker): that is

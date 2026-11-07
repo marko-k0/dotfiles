@@ -48,7 +48,7 @@ require("lazy").setup({
     lazy = false,
     version = false, -- always use the latest git commit
   },
-  install = { colorscheme = { "gruvbox", "habamax" } },
+  install = { colorscheme = { "gruvbox-material", "habamax" } },
   checker = { enabled = false }, -- no update prompts; ./update.sh does this
   performance = {
     rtp = {

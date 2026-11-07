@@ -47,7 +47,7 @@ mise ls                                 # tools and the pins they came from
 mise which nvim && nvim --version       # shim -> versioned install
 fish -c 'kubectl version --client'      # shims resolve inside fish (incl. fish -c)
 git -C ~/.config/nvim status                # config is chezmoi-managed (no clone)
-nvim --headless '+lua print(vim.g.colors_name)' +qa   # gruvbox (LazyVim)
+nvim --headless '+lua print(vim.g.colors_name)' +qa   # gruvbox-material (LazyVim)
 ./update.sh                             # should finish with "done: everything up to date"
 ```
 
@@ -137,7 +137,7 @@ Handled inside the scripts/templates, no per-distro bootstrap needed:
 ## What's included
 
 - **Fish shell** - Vi mode, Tide prompt, fzf integration, git aliases
-- **Neovim** - LazyVim with Gruvbox theme, LSP, Copilot, codecompanion, DAP debugging
+- **Neovim** - LazyVim with the gruvbox-material theme, LSP, Copilot, codecompanion, DAP debugging
 - **Tmux** - Powerline status bar, vim-style navigation, clipboard integration
 - **Kitty** - Gruvbox Dark Soft theme, custom tab bar
 
@@ -319,7 +319,7 @@ Behaviour changes worth knowing:
 | nvim-tree (`<leader>e`) | LazyVim's explorer on the same key |
 | go.nvim | LazyVim's `lang.go` extra: gopls, goimports/gofumpt, delve, neotest |
 | rust.vim + rustfmt autosave | rustaceanvim + a `BufWritePre` rustfmt autocmd |
-| Gruvbox with transparency | same (`lua/plugins/theme.lua`) |
+| Gruvbox with transparency | gruvbox-material, transparent (`lua/plugins/theme.lua`) |
 | OSC 52 clipboard | same (`lua/config/options.lua`) |
 
 Old NvChad config still available for reference:
