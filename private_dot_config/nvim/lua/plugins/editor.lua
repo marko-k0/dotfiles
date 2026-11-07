@@ -1,15 +1,19 @@
 -- Editor plugins and overrides on top of LazyVim.
 return {
-  -- Telescope: ivy-style layout (kept from the previous config)
+  -- Telescope: ivy layout (as before). No custom navigation keys: telescope
+  -- already provides <C-n>/<C-p> in insert mode and j/k in normal mode.
+  --
+  -- Merged into LazyVim's opts rather than calling telescope.setup() here:
+  -- LazyVim's telescope extra (selected by vim.g.lazyvim_picker in
+  -- lua/config/options.lua) supplies its own defaults, and a second setup()
+  -- call would replace the mappings table defined below.
   {
     "nvim-telescope/telescope.nvim",
     opts = function(_, opts)
-      require("telescope").setup({
-        defaults = require("telescope.themes").get_ivy(),
-        pickers = {
-          buffers = {
-            mappings = { n = { ["d"] = "delete_buffer" } },
-          },
+      opts.defaults = vim.tbl_deep_extend("force", opts.defaults or {}, require("telescope.themes").get_ivy())
+      opts.pickers = vim.tbl_deep_extend("force", opts.pickers or {}, {
+        buffers = {
+          mappings = { n = { ["d"] = "delete_buffer" } },
         },
       })
       return opts

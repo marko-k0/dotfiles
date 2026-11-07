@@ -155,6 +155,10 @@ selected that way gets installed but never registered (so keymaps would quietly
 use snacks). Remove that line, and the telescope spec in
 `lua/plugins/editor.lua`, to go back to snacks.
 
+Moving inside a picker (telescope defaults, nothing custom): typing filters,
+`<C-n>`/`<C-p>` move the selection, `j`/`k` work in normal mode, `<Tab>`/`<S-Tab>`
+multi-select.
+
 The config is plain files managed by chezmoi (`init.lua`, `lua/config/*.lua`,
 `lua/plugins/*.lua`); there is no upstream starter clone. `lua/config/lazy.lua`
 clones lazy.nvim on first start, and the `run_once_after_20_nvim_plugins.sh` hook
