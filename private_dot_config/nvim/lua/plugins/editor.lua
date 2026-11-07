@@ -20,6 +20,29 @@ return {
     end,
   },
 
+  -- Seamless <C-h/j/k/l> between nvim splits and tmux panes. The tmux half is
+  -- the TPM plugin declared in dot_tmux.conf; this one replaces LazyVim's plain
+  -- window mappings with versions that hand off to tmux at the edge. Keys are
+  -- lazy triggers, so nothing loads until the first <C-h>.
+  {
+    "christoomey/vim-tmux-navigator",
+    cmd = {
+      "TmuxNavigateLeft",
+      "TmuxNavigateDown",
+      "TmuxNavigateUp",
+      "TmuxNavigateRight",
+      "TmuxNavigatePrevious",
+      "TmuxNavigatorProcessList",
+    },
+    keys = {
+      { "<c-h>", "<cmd><C-U>TmuxNavigateLeft<cr>" },
+      { "<c-j>", "<cmd><C-U>TmuxNavigateDown<cr>" },
+      { "<c-k>", "<cmd><C-U>TmuxNavigateUp<cr>" },
+      { "<c-l>", "<cmd><C-U>TmuxNavigateRight<cr>" },
+      { "<c-\\>", "<cmd><C-U>TmuxNavigatePrevious<cr>" },
+    },
+  },
+
   -- Git UI
   {
     "NeogitOrg/neogit",
