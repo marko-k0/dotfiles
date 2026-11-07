@@ -33,7 +33,7 @@ su tester -c "HOME=/home/tester bash $REPO/init.sh" 2>&1 | tee /tmp/init.log
 
 echo "=== All setup scripts must have run ==="
 # claude/happier skip in CI (their installers 403 datacenter IPs)
-for stage in packages mise nvchad tmux fish nvim-plugins shell; do
+for stage in packages mise nvim tmux fish nvim-plugins shell; do
     grep -q "==> \[$stage\]" /tmp/init.log || {
         echo "ERROR: [${stage}] script never ran" >&2; exit 1;
     }
@@ -60,7 +60,21 @@ fish -n /home/tester/.config/fish/config.fish
 grep -q "mise activate fish" /home/tester/.config/fish/config.fish
 test -f /home/tester/.config/mise/config.toml
 test -f /home/tester/.tmux.conf
-test -d /home/tester/.config/nvim/lua/custom
+# Neovim: fully managed LazyVim config (nothing cloned)
+test -f /home/tester/.config/nvim/init.lua
+test -f /home/tester/.config/nvim/lua/config/lazy.lua
+test -f /home/tester/.config/nvim/lua/plugins/theme.lua
+# lazy.nvim sync actually installed LazyVim and the theme
+test -d /home/tester/.local/share/nvim/lazy/LazyVim
+test -d /home/tester/.local/share/nvim/lazy/gruvbox.nvim
+# the config loads without startup errors
+load_log="$(su tester -c "nvim --headless '+lua vim.print(\"nvim-ok\")' +qa" 2>&1 || true)"
+printf '%s\n' "$load_log" | grep -q 'nvim-ok'
+if printf '%s\n' "$load_log" | grep -qE 'E5113|Error detected|Failed to load'; then
+    echo "ERROR: Neovim config failed to load:" >&2
+    printf '%s\n' "$load_log" >&2
+    exit 1
+fi
 test -f /home/tester/.local/bin/chezmoi
 pacman -Qi fish tmux >/dev/null
 su tester -c "fish -c 'echo fish-runs'"

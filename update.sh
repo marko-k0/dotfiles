@@ -108,11 +108,8 @@ else
     warn "mise not found; skipping toolchain updates"
 fi
 
-# NvChad is a git clone owned by chezmoi's custom layer: pull it forward.
-if [ -d "$HOME/.config/nvim/.git" ]; then
-    log "Updating NvChad (git pull)"
-    run_step "nvchad" git -C "$HOME/.config/nvim" pull --ff-only
-fi
+# Neovim config is fully chezmoi-managed (LazyVim), so there is no upstream tree
+# to pull: lazy.nvim updates LazyVim and every plugin.
 
 # ---------------------------------------------------------------------------
 # Plugin managers (their own update paths)
@@ -129,7 +126,7 @@ if command -v fish >/dev/null 2>&1 \
     run_step "fisher" fish -c 'fisher update' >/dev/null
 fi
 
-if command -v nvim >/dev/null 2>&1 && [ -d "$HOME/.config/nvim/lua/core" ]; then
+if command -v nvim >/dev/null 2>&1 && [ -f "$HOME/.config/nvim/lua/config/lazy.lua" ]; then
     log "Updating Neovim plugins (Lazy)"
     # Headless Lazy update; quiet (very noisy) and non-fatal when offline.
     run_step "lazy" nvim --headless "+Lazy! update" +qa >/dev/null 2>&1
