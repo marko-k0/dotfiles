@@ -22,9 +22,11 @@ chmod 440 /etc/sudoers.d/tester
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 DATA="$REPO/.chezmoidata/software.yaml"
 
+# No `| head -1` (or `grep -q` downstream): with pipefail, a consumer exiting
+# early sends SIGPIPE to the producer and the pipeline returns 141.
 tool_pin() {
     sed -n '/^  tools:/,/^[a-z]/p' "$DATA" \
-        | grep -E "^    \"?$1\"?:" | head -1 \
+        | grep -E "^    \"?$1\"?:" \
         | sed 's/.*"\([^"]*\)"[[:space:]]*$/\1/'
 }
 
@@ -94,7 +96,16 @@ if [ -n "$pinned_go" ] && [ "$pinned_go" != "latest" ]; then
     test "$(/usr/local/bin/go env GOVERSION)" = "go${pinned_go}"
 fi
 if [ -n "$pinned_nvim" ] && [ "$pinned_nvim" != "latest" ]; then
-    su tester -c "fish -c 'nvim --version'" | head -1 | grep -qF "v${pinned_nvim}"
+    # No `| head -1` pipeline: nvim keeps writing, head exits, SIGPIPE -> 141.
+    nvim_version="$(su tester -c "fish -c 'nvim --version'")"
+    case "$nvim_version" in
+    *"v${pinned_nvim}"*) ;;
+    *)
+        echo "ERROR: pinned neovim v${pinned_nvim} not installed:" >&2
+        printf '%s\n' "$nvim_version" >&2
+        exit 1
+        ;;
+    esac
 fi
 
 echo "ARCH: ALL ASSERTIONS PASSED"

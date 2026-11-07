@@ -23,9 +23,11 @@ REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 DATA="$REPO/.chezmoidata/software.yaml"
 
 # Read a pinned version for a mise tool from the data file.
+# Note: no `| head -1` here (or `grep -q` downstream): with pipefail, a consumer
+# exiting early sends SIGPIPE to the producer and the pipeline returns 141.
 tool_pin() {
     sed -n '/^  tools:/,/^[a-z]/p' "$DATA" \
-        | grep -E "^    \"?$1\"?:" | head -1 \
+        | grep -E "^    \"?$1\"?:" \
         | sed 's/.*"\([^"]*\)"[[:space:]]*$/\1/'
 }
 
@@ -50,7 +52,7 @@ test -x /usr/local/bin/go
 test -x /usr/bin/fish
 test -x /usr/bin/direnv
 # fzf and neovim come from mise, not from apt
-if dpkg -l fzf neovim 2>/dev/null | grep -q '^ii'; then
+if dpkg -l fzf neovim 2>/dev/null | grep '^ii' >/dev/null; then
     echo "ERROR: fzf/neovim should be mise-managed, not apt-installed" >&2; exit 1
 fi
 test -f /home/tester/.config/fish/config.fish
@@ -114,13 +116,22 @@ if [ -n "$pinned_go" ] && [ "$pinned_go" != "latest" ]; then
     test "$(/usr/local/bin/go env GOVERSION)" = "go${pinned_go}"
 fi
 if [ -n "$pinned_nvim" ] && [ "$pinned_nvim" != "latest" ]; then
-    su tester -c "fish -c 'nvim --version'" | head -1 | grep -qF "v${pinned_nvim}"
+    # No `| head -1` pipeline: nvim keeps writing, head exits, SIGPIPE -> 141.
+    nvim_version="$(su tester -c "fish -c 'nvim --version'")"
+    case "$nvim_version" in
+    *"v${pinned_nvim}"*) ;;
+    *)
+        echo "ERROR: pinned neovim v${pinned_nvim} not installed:" >&2
+        printf '%s\n' "$nvim_version" >&2
+        exit 1
+        ;;
+    esac
 fi
 if [ -n "$pinned_kubectl" ] && [ "$pinned_kubectl" != "latest" ]; then
-    su tester -c "fish -c 'kubectl version --client'" | grep -qF "v${pinned_kubectl}"
+    su tester -c "fish -c 'kubectl version --client'" | grep -F "v${pinned_kubectl}" >/dev/null
 fi
 # mise-managed CLI tools resolve through shims in a login shell
-su tester -c "fish -c 'kind --version'" | grep -q 'kind version'
-su tester -c "fish -c 'helm version --short'" | grep -q 'v'
+su tester -c "fish -c 'kind --version'" | grep 'kind version' >/dev/null
+su tester -c "fish -c 'helm version --short'" | grep 'v' >/dev/null
 
 echo "UBUNTU 24.04: ALL ASSERTIONS PASSED"
