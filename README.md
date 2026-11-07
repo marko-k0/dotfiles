@@ -475,6 +475,14 @@ profile adds `rust-docs` and roughly doubles that. Excluding the shim
 (`mise settings shims.exclude=rust-analyzer`) only turns the loop into a clean
 `Unknown binary 'rust-analyzer'` error; it is not a fix.
 
+**`mise WARN [sloth] aqua version filter error: Invalid operand for operator !`**
+(repeated once per release tag). The aqua registry entry for `slok/sloth` declares
+`version_filter: not Version startsWith "sloth-helm-chart-"`; mise 2026.11.2's
+filter evaluator cannot parse that expression and logs a warning for every tag
+while still resolving the pinned version correctly. Fixed in mise 2026.11.3, so
+`mise self-update` (which `./update.sh` runs) removes the noise. Alternatively,
+install sloth through `ubi:slok/sloth`, which has no version filter.
+
 ## CI
 
 GitHub Actions runs on every push/PR (plus a weekly scheduled run to catch
