@@ -146,4 +146,24 @@ fi
 su tester -c "fish -c 'kind --version'" | grep 'kind version' >/dev/null
 su tester -c "fish -c 'helm version --short'" | grep 'v' >/dev/null
 
+# Rust comes from mise's rustup backend with an explicit component list. The
+# rust-analyzer component is what stops the rustup proxy from recursing into
+# mise's shim ("fallback recursion detected"), so assert both.
+rustc_version="$(su tester -c "fish -c 'rustc --version'")"
+case "$rustc_version" in
+rustc\ 1.*) ;;
+*)
+    echo "ERROR: rustc is not available: '$rustc_version'" >&2
+    exit 1
+    ;;
+esac
+su tester -c "fish -c 'rust-analyzer --version'" | grep 'rust-analyzer' >/dev/null || {
+    echo "ERROR: rust-analyzer does not run (component missing?)" >&2
+    exit 1
+}
+su tester -c "fish -c 'rustup component list --installed'" | grep 'rust-analyzer' >/dev/null || {
+    echo "ERROR: rust-analyzer component is not installed in the toolchain" >&2
+    exit 1
+}
+
 echo "UBUNTU 24.04: ALL ASSERTIONS PASSED"

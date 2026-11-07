@@ -71,6 +71,10 @@ mise:
     oh-my-posh: "31.3.0"
     uv: "0.12.23"
     "aqua:cilium/cilium-cli": "0.20.2"
+    rust:                       # table spec: version + rustup options
+      version: "1.97.0"
+      profile: minimal          # no rust-docs; ~750 MB instead of ~1.6 GB
+      components: [rust-analyzer, rust-src, rustfmt, clippy]
 
 packages:
   debian:   [fish, tmux, git, curl, powerline, direnv, kitty-terminfo]
@@ -101,6 +105,20 @@ mise's own `install --system` is deliberately not used: `core:go` rejects it
 ("automatic system installation currently supports binary-download backends
 only" on mise 2026.11.2), and symlinking the user-store binary gives the same
 global visibility without needing `/etc/mise/config.toml`.
+
+**Tool options (table specs).** A tool value can be a table instead of a version
+string; it is rendered into `config.toml` as a TOML inline table, so every option
+the backend supports is available:
+
+```toml
+"rust" = { version = "1.97.0", profile = "minimal", components = ["rust-analyzer", "rust-src", "rustfmt", "clippy"] }
+```
+
+Rust needs this form: `rust-analyzer` is not part of rustup's minimal profile, and
+without the component the rustup proxy in `~/.cargo/bin` falls back into mise's
+shim for the same name and recurses (see Troubleshooting). `rustfmt` and `clippy`
+are explicit for the same reason — the minimal profile omits them, and the repo
+format-on-save autocmd needs `rustfmt`.
 
 **Bumping a version** is a data edit:
 
@@ -198,7 +216,7 @@ a pin (or declare `"latest"` for a tool).
 | Component | Update |
 |-----------|--------|
 | mise itself | `mise self-update` (run by `./update.sh`) |
-| go, neovim, fzf, kubectl, kind, helm, kubectx, oh-my-posh, uv, cilium | bump the pin in `software.yaml`, then `chezmoi apply` |
+| go, neovim, fzf, kubectl, kind, helm, kubectx, oh-my-posh, uv, cilium, rust | bump the pin in `software.yaml`, then `chezmoi apply` |
 | LazyVim + nvim plugins | `nvim --headless "+Lazy! update" +qa` (also `./update.sh`) |
 | tmux plugins | `~/.tmux/plugins/tpm/bin/update_plugins all`, then `prefix + I` |
 | fish plugins | `fish -c 'fisher update'` |
@@ -428,12 +446,16 @@ installing them by hand, so `mise install` re-adds them after a toolchain bump:
 
 ```toml
 [tools]
-rust = { version = "1.97", components = ["rust-analyzer", "rust-src"] }
+rust = { version = "1.97", profile = "minimal", components = ["rust-analyzer", "rust-src", "rustfmt", "clippy"] }
 ```
 
-Notes: this repo does not pin Rust (it is a per-project concern, so put the
-snippet above in the project's `mise.toml` or add it to `software.yaml`), and a
-Rust toolchain is about 1.6 GB in `RUSTUP_HOME`. Excluding the shim
+That is exactly what `.chezmoidata/software.yaml` now declares for this repo
+(`mise.tools.rust`), so a fresh machine gets a working `rust-analyzer` without
+the manual step. The same table works in a project-local `mise.toml` when a repo
+wants a different toolchain.
+
+Notes: `profile: minimal` keeps `RUSTUP_HOME` at about 750 MB; rustup's `default`
+profile adds `rust-docs` and roughly doubles that. Excluding the shim
 (`mise settings shims.exclude=rust-analyzer`) only turns the loop into a clean
 `Unknown binary 'rust-analyzer'` error; it is not a fix.
 
