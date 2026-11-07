@@ -388,6 +388,36 @@ activates mise (via `config.fish`); plain `bash`/`sh` scripts need
 `mise exec -- <cmd>`, or the tool belongs in `global_tools` so `hybrid` mode
 symlinks it into `/usr/local/bin`.
 
+**`rust-analyzer` loops or fails with `mise ERROR shim fallback recursion
+detected for rust-analyzer`.** This is mise's rust backend plus rustup, not a
+broken config here. mise installs Rust through rustup, and rustup ships a
+`rust-analyzer` *proxy* in `~/.cargo/bin` whether or not the toolchain has the
+component; mise also creates a shim for it. So the proxy reports `rust-analyzer
+is unavailable for the active toolchain`, falls back to `PATH`, finds mise's
+shim, which asks rustup again: a loop.
+
+The cause is a missing rustup component (`rust-analyzer` is not part of
+rustup's `minimal`/`default` profiles). Fix it in the toolchain:
+
+```bash
+rustup component add rust-analyzer          # add rust-src too for std source
+rust-analyzer --version                      # -> rust-analyzer 1.97.1 (8bab26f)
+```
+
+To make it permanent for a mise-managed Rust, declare the components instead of
+installing them by hand, so `mise install` re-adds them after a toolchain bump:
+
+```toml
+[tools]
+rust = { version = "1.97", components = ["rust-analyzer", "rust-src"] }
+```
+
+Notes: this repo does not pin Rust (it is a per-project concern, so put the
+snippet above in the project's `mise.toml` or add it to `software.yaml`), and a
+Rust toolchain is about 1.6 GB in `RUSTUP_HOME`. Excluding the shim
+(`mise settings shims.exclude=rust-analyzer`) only turns the loop into a clean
+`Unknown binary 'rust-analyzer'` error; it is not a fix.
+
 ## CI
 
 GitHub Actions runs on every push/PR (plus a weekly scheduled run to catch
