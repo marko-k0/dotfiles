@@ -78,6 +78,21 @@ tmux -L citest show -s terminal-overrides | grep -q 'Ms=' || {
     echo "ERROR: tmux terminal-overrides lacks Ms (OSC 52)" >&2; exit 1; }
 tmux -L citest list-keys -T copy-mode-vi | grep -q 'y .*copy-selection' || {
     echo "ERROR: copy-mode-vi y is not bound to copy-selection" >&2; exit 1; }
+# Reloading must not print option errors (e.g. tmux-3.5-only options on 3.4)
+# and must not grow terminal-overrides (set -as vs set -g).
+tmux -L citest source-file "$HOME/.tmux.conf" 2>/tmp/tmux-src.err || true
+tmux -L citest source-file "$HOME/.tmux.conf" 2>>/tmp/tmux-src.err || true
+if grep -qE 'invalid option|unknown option|unknown command' /tmp/tmux-src.err; then
+    echo "ERROR: tmux config reload reported an error:" >&2
+    cat /tmp/tmux-src.err >&2
+    exit 1
+fi
+entries="$(tmux -L citest show -s terminal-overrides | wc -l | tr -d ' ')"
+if [ "$entries" -ne 2 ]; then
+    echo "ERROR: terminal-overrides has $entries entries after reloads (expected 2)" >&2
+    tmux -L citest show -s terminal-overrides >&2
+    exit 1
+fi
 # default-shell is fish, which takes a moment to start and print; entering
 # copy-mode before that gives an empty pane (blank-line copy).
 i=0
@@ -139,29 +154,50 @@ if ! printf '%s\n' "$picker_log" | grep -q 'picker=telescope'; then
     exit 1
 fi
 
-# OSC 52 wiring in lua/config/options.lua: copy is always available (the only
-# way to reach the local clipboard from a remote nvim), paste only when a
-# terminal could answer a read query (tmux never forwards one; ssh cannot).
+# OSC 52 wiring in lua/config/options.lua: copy always exists (the only route to
+# the local clipboard from a remote nvim), paste only where a terminal could
+# answer a read query, and a real yank must emit the escape sequence.
+# nvim_ui_send is stubbed, so no terminal is needed.
 cat > /tmp/clipcheck.lua <<'LUA'
 local cb = vim.g.clipboard or {}
 io.write(string.format("copy=%d paste=%d\n",
   cb.copy and vim.tbl_count(cb.copy) or 0,
   cb.paste and vim.tbl_count(cb.paste) or 0))
+local n = 0
+for _, a in ipairs(vim.api.nvim_get_autocmds({ event = "TextYankPost" })) do
+  if a.group_name == "dotfiles-osc52" then n = n + 1 end
+end
+io.write("autocmds=" .. n .. "\n")
+local sent = nil
+local orig = vim.api.nvim_ui_send
+vim.api.nvim_ui_send = function(seq) sent = seq end
+require("vim.ui.clipboard.osc52").copy("+")({ "alpha" })
+io.write("direct=" .. tostring(sent) .. "\n")
+sent = nil
+vim.api.nvim_buf_set_lines(0, 0, -1, false, { "yanked-line" })
+vim.cmd("normal! yy")
+io.write("yank=" .. tostring(sent) .. "\n")
+vim.api.nvim_ui_send = orig
 vim.cmd("qa!")
 LUA
 clip_args="'+luafile /home/tester/.config/nvim/lua/config/options.lua' '+luafile /tmp/clipcheck.lua'"
+assert_clip() {
+    log="$1"; want="$2"; label="$3"
+    printf '%s\n' "$log" | grep -q "copy=2 paste=$want" || {
+        echo "ERROR: $label clipboard wiring (expected copy=2 paste=$want):" >&2
+        printf '%s\n' "$log" >&2; exit 1; }
+    printf '%s\n' "$log" | grep -q 'autocmds=1' || {
+        echo "ERROR: $label TextYankPost autocmd missing:" >&2
+        printf '%s\n' "$log" >&2; exit 1; }
+    # base64("yanked-line"); the autocmd must have produced an OSC 52 sequence.
+    printf '%s\n' "$log" | grep -q 'yank=.*eWFua2VkLWxpbmU=' || {
+        echo "ERROR: $label yank did not emit OSC 52:" >&2
+        printf '%s\n' "$log" >&2; exit 1; }
+}
 local_clip="$(su tester -c "nvim --headless -u NONE -i NONE $clip_args" 2>&1)"
-if ! printf '%s\n' "$local_clip" | grep -q 'copy=2 paste=2'; then
-    echo "ERROR: local clipboard wiring is wrong (expected copy=2 paste=2):" >&2
-    printf '%s\n' "$local_clip" >&2
-    exit 1
-fi
+assert_clip "$local_clip" 2 local
 remote_clip="$(su tester -c "SSH_CONNECTION='1.2.3.4 1 5.6.7.8 22' nvim --headless -u NONE -i NONE $clip_args" 2>&1)"
-if ! printf '%s\n' "$remote_clip" | grep -q 'copy=2 paste=0'; then
-    echo "ERROR: remote clipboard wiring is wrong (expected copy=2 paste=0):" >&2
-    printf '%s\n' "$remote_clip" >&2
-    exit 1
-fi
+assert_clip "$remote_clip" 0 remote
 
 test -f /home/tester/.local/bin/chezmoi
 pacman -Qi fish tmux >/dev/null
