@@ -207,6 +207,44 @@ The config is plain files managed by chezmoi (`init.lua`, `lua/config/*.lua`,
 clones lazy.nvim on first start, and the `run_once_after_20_nvim_plugins.sh` hook
 runs a headless `Lazy! sync` so a fresh machine comes up with every plugin.
 
+### Clipboard over ssh, mosh and tmux
+
+Copying from a remote machine to the local clipboard uses **OSC 52**, which is
+relayed by ssh and by mosh (mosh forwards `OSC 52;c;` writes to the local
+terminal). Nothing needs X forwarding or `xclip` on the server.
+
+| Action | How |
+|---|---|
+| tmux copy-mode -> local clipboard | `prefix [`, select, `y` (tmux emits OSC 52) |
+| Neovim -> local clipboard | `y` (autocmd on `TextYankPost`) or `"+y` |
+| local clipboard -> remote editor/shell | the terminal's paste, e.g. `Ctrl+Shift+V` in kitty |
+
+Two tmux settings are required and are set in `dot_tmux.conf.common`:
+
+- `set -as terminal-overrides ',*:Ms=\E]52;%p1%s;%p2%s\007'` - tmux only emits
+  OSC 52 when the outer terminal's terminfo has an `Ms` entry, and Ubuntu's
+  `xterm-256color`/`xterm-kitty` do not, so without it copies are silently lost.
+- `set -s set-clipboard on` - with `external`, tmux drops OSC 52 writes coming
+  from applications, so Neovim copies never leave the server.
+
+`tmux-yank` is not used: it pipes the selection into `xsel`/`xclip`/`wl-copy`,
+which fail on a headless remote (no `$DISPLAY`), and when none of those tools
+exists it replaces `y` with an error binding. `y` and mouse-drag yank are bound
+directly to tmux's OSC 52 path instead.
+
+What does not work, by design:
+
+- **Programmatic paste from the local clipboard** (`"+p` in Neovim, `xsel -o`
+  on the server). tmux does not forward OSC 52 read queries in any mode, and
+  this repo's `kitty.conf` grants only write permissions
+  (`clipboard_control write-clipboard write-primary no-append`), so reads are
+  denied at the terminal. Use the terminal's paste instead.
+- **`clipboard=unnamedplus`** is not set remotely (LazyVim already leaves
+  `clipboard` empty when `SSH_CONNECTION` is set). It would route `p`/`P`
+  through the clipboard provider, which either stalls for ten seconds waiting
+  for a read reply or pastes characterwise and loses linewise semantics, and it
+  would send every delete to the local clipboard.
+
 ## Post-install
 
 - Log out and back in for fish shell to take effect

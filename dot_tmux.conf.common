@@ -50,14 +50,27 @@ set -g focus-events on
 set -g mouse on
 
 # clipboard & terminal features
-set -s set-clipboard external
+# tmux only emits OSC 52 if the OUTER terminal's terminfo has an Ms entry.
+# Ubuntu's xterm-256color and xterm-kitty do not, so without this override a
+# copy is silently dropped - locally, and over ssh/mosh (mosh relays OSC 52
+# writes, but only if tmux emits them in the first place).
+set -as terminal-overrides ',*:Ms=\E]52;%p1%s;%p2%s\007'
+# "on", not "external": external discards OSC 52 writes from applications such
+# as Neovim, which is the only way nvim can reach the local clipboard remotely.
+set -s set-clipboard on
 set -as terminal-features ',xterm-kitty:clipboard'
 set -as terminal-overrides ',*:Smulx=\E[4::%p1%dm'
 
 # vi copy-paste mode
 setw -g mode-keys vi
-bind -T copy-mode-vi 'v' send -X begin-selection; bind -T copy-mode-vi 'y' send -X copy-selection
-bind-key -T copy-mode-vi y if-shell "test ! -z $KITTY_WINDOW_ID" "send-keys -X copy-pipe 'kitty +kitten clipboard'" "send-keys -X copy-pipe  'pbcopy'"
+bind -T copy-mode-vi 'v' send -X begin-selection
+# y copies through tmux, which emits OSC 52 (see the Ms override above). This
+# replaces tmux-yank: that plugin pipes the selection into xsel/xclip/wl-copy,
+# which fails on a headless remote (no $DISPLAY), and it installs error bindings
+# when no clipboard utility exists at all (e.g. a minimal Arch container),
+# overriding this binding.
+bind -T copy-mode-vi 'y' send -X copy-selection-and-cancel
+bind -T copy-mode-vi 'MouseDragEnd1Pane' send -X copy-selection-and-cancel
 
 set -g update-environment "SSH_AUTH_SOCK SSH_AGENT_PID"
 setenv -g SSH_AUTH_SOCK $HOME/.ssh/ssh_auth_sock
