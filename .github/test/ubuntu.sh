@@ -117,6 +117,16 @@ fi
 echo "lazy.nvim clone failure exits cleanly (rc=${rc})"
 test -f /home/tester/.local/bin/chezmoi
 su tester -c "fish -c 'echo fish-runs'"
+# fzf.fish must actually install its Ctrl-R binding. Plugin v11+ needs fish 4
+# key-name syntax, which Ubuntu 24.04's fish 3.7 mis-parses (bindings silently
+# never fire), so fish_plugins pins @v10.3. Assert it, or the pin regresses
+# silently again.
+fzf_bindings="$(su tester -c "timeout 20 fish -i -c 'bind \cr'" 2>/dev/null || true)"
+printf '%s\n' "$fzf_bindings" | grep -q '_fzf_search_history' || {
+    echo "ERROR: fzf.fish Ctrl-R binding missing (fish/plugin version drift?):" >&2
+    printf '%s\n' "$fzf_bindings" >&2
+    exit 1
+}
 
 # Declared versions must actually be installed (read from the data file, so a
 # stale pin fails CI instead of silently installing whatever upstream ships).

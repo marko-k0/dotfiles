@@ -19,8 +19,11 @@ the checkout, and runs `chezmoi apply`. Everything else happens inside chezmoi:
 - dotfiles are written (templates branch on the distro via `.osRelease`)
 - `run_after_05_mise.sh` installs the mise-managed tools (runs on every apply,
   ~20ms no-op) and links selected ones into `/usr/local/bin`
-- `run_once_after_*` scripts run **after** (TPM, Fisher, plugin syncs,
-  Claude Code, Happier, Raspbian VPNs)
+- `run_once_after_*` scripts run **after** (TPM, plugin syncs, Claude Code,
+  Happier, Raspbian VPNs)
+- `run_after_10_fish` runs on every apply and reconciles fish plugins to
+  `fish_plugins` only when they drift (a pin change never alters the script's
+  content hash, so `run_once_` would miss it)
 - `run_once_*` scripts re-run when their content changes (login shell)
 
 | Script | What |
@@ -29,7 +32,7 @@ the checkout, and runs `chezmoi apply`. Everything else happens inside chezmoi:
 | `run_once_before_20_lazyvim.sh` | migrate away from an old NvChad config (nothing is cloned; `~/.config/nvim` is fully managed) |
 | `run_after_05_mise.sh.tmpl` | `mise install` + global symlinks for `global_tools` |
 | `run_once_after_00_tmux.sh` | TPM + tmux plugins |
-| `run_once_after_10_fish.sh` | Fisher + fish plugins |
+| `run_after_10_fish.sh` | Fisher + fish plugins, reconciled to `fish_plugins` when it drifts |
 | `run_once_after_20_nvim_plugins.sh` | headless `Lazy! sync` |
 | `run_once_after_30_claude.sh` | Claude Code |
 | `run_once_after_40_happier.sh` | Happier |
@@ -255,7 +258,7 @@ a pin (or declare `"latest"` for a tool).
 | any mise tool (go, neovim, kubectl, k9s, trivy, rust, …) | bump the pin in `software.yaml`, then `chezmoi apply` |
 | LazyVim + nvim plugins | `nvim --headless "+Lazy! update" +qa` (also `./update.sh`) |
 | tmux plugins | `~/.tmux/plugins/tpm/bin/update_plugins all`, then `prefix + I` |
-| fish plugins | `fish -c 'fisher update'` |
+| fish plugins | `fish -c 'fisher update'` (the apply hook does this automatically when `fish_plugins` changes) |
 | system packages | `sudo apt-get update && sudo apt-get upgrade` / `sudo pacman -Syu` |
 | Claude Code | self-updates in place |
 
