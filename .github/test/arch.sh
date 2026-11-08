@@ -120,6 +120,20 @@ if [ -n "$pinned_nvim" ] && [ "$pinned_nvim" != "latest" ]; then
     esac
 fi
 
+# ops tooling: every declared mise tool must resolve through the shims
+su tester -c "fish -c 'command -q istioctl; and command -q kubebuilder; and command -q yq; and command -q fortio; and command -q grpcurl; and command -q crane; and command -q k9s; and command -q stern; and command -q dlv; and command -q golangci-lint; and command -q kubens; and command -q kubectx; and command -q krew; and command -q pluto; and command -q kubeconform; and command -q kube-score; and command -q trivy; and command -q sloth'" || {
+    echo "ERROR: one or more mise ops tools are not on PATH (istioctl kubebuilder yq fortio grpcurl crane k9s stern dlv golangci-lint kubens kubectx krew pluto kubeconform kube-score trivy sloth)" >&2
+    exit 1
+}
+# distro diagnostics: binaries provided by the apt/pacman lists
+for b in conntrack socat stress-ng iperf3 hping3 tree htop btop ncdu fio \
+    tcpdump mtr iftop nmap lsof strace iotop sar ss ip perf df du ps vmstat; do
+    command -v "$b" >/dev/null || {
+        echo "ERROR: missing diagnostic tool: $b" >&2
+        exit 1
+    }
+done
+
 # Rust comes from mise's rustup backend with an explicit component list. The
 # rust-analyzer component is what stops the rustup proxy from recursing into
 # mise's shim ("fallback recursion detected"), so assert both.

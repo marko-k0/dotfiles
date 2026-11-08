@@ -88,6 +88,21 @@ prompt hot path, or is a security primitive whose distro backports matter
 (git, curl). Everything else that ships release binaries goes to mise. A tool
 may appear in only one list; CI enforces that for debian and arch.
 
+Beyond the core set, the same file declares two groups that are kept out of the
+snippet above for readability:
+
+- **service/cluster ops tooling** (mise): `istioctl`, `kubebuilder`, `yq`,
+  `fortio`, `grpcurl`, `crane`, `k9s`, `stern`, `dlv`, `golangci-lint`,
+  `kubens`, `krew`, `pluto`, `kubeconform`, `kube-score`, `trivy`, `sloth`
+- **host diagnostics** (distro): `btop`/`htop`, `ncdu`, `fio`, `tcpdump`,
+  `mtr`, `iftop`, `nmap`, `lsof`, `strace`, `iotop`, `bpftrace`, `sysstat`
+  (`sar`/`iostat`/`mpstat`), `perf`, plus `conntrack`, `socat`, `stress-ng`,
+  `iperf3`, `hping3`, `tree`
+
+`perf` comes from `linux-tools-generic` on Ubuntu, i.e. the archive's newest
+kernel tools rather than the running kernel. On a host whose kernel is older
+than that, install `linux-tools-$(uname -r)` to match.
+
 **How tools are exposed** (`mise.install_mode`):
 
 | mode | behaviour |
@@ -158,6 +173,7 @@ Handled inside the scripts/templates, no per-distro bootstrap needed:
 - **Neovim** - LazyVim with the gruvbox-material theme, LSP, Copilot, codecompanion, DAP debugging
 - **Tmux** - Powerline status bar, vim-style navigation, clipboard integration
 - **Kitty** - Gruvbox Dark Soft theme, custom tab bar
+- **Ops tooling** - cluster/service debugging (`istioctl`, `k9s`, `stern`, `grpcurl`, `dlv`, `crane`, `kubebuilder`, `yq`, ...), policy/validation (`trivy`, `kubeconform`, `kube-score`, `pluto`, `sloth`), and host diagnostics (`btop`, `ncdu`, `fio`, `tcpdump`, `mtr`, `nmap`, `strace`, `iotop`, `bpftrace`, `perf`, `sysstat`)
 
 ### Neovim plugins
 
@@ -216,7 +232,7 @@ a pin (or declare `"latest"` for a tool).
 | Component | Update |
 |-----------|--------|
 | mise itself | `mise self-update` (run by `./update.sh`) |
-| go, neovim, fzf, kubectl, kind, helm, kubectx, oh-my-posh, uv, cilium, rust | bump the pin in `software.yaml`, then `chezmoi apply` |
+| any mise tool (go, neovim, kubectl, k9s, trivy, rust, …) | bump the pin in `software.yaml`, then `chezmoi apply` |
 | LazyVim + nvim plugins | `nvim --headless "+Lazy! update" +qa` (also `./update.sh`) |
 | tmux plugins | `~/.tmux/plugins/tpm/bin/update_plugins all`, then `prefix + I` |
 | fish plugins | `fish -c 'fisher update'` |
@@ -458,6 +474,14 @@ Notes: `profile: minimal` keeps `RUSTUP_HOME` at about 750 MB; rustup's `default
 profile adds `rust-docs` and roughly doubles that. Excluding the shim
 (`mise settings shims.exclude=rust-analyzer`) only turns the loop into a clean
 `Unknown binary 'rust-analyzer'` error; it is not a fix.
+
+**`mise WARN [sloth] aqua version filter error: Invalid operand for operator !`**
+(repeated once per release tag). The aqua registry entry for `slok/sloth` declares
+`version_filter: not Version startsWith "sloth-helm-chart-"`; mise 2026.11.2's
+filter evaluator cannot parse that expression and logs a warning for every tag
+while still resolving the pinned version correctly. Fixed in mise 2026.11.3, so
+`mise self-update` (which `./update.sh` runs) removes the noise. Alternatively,
+install sloth through `ubi:slok/sloth`, which has no version filter.
 
 ## CI
 
