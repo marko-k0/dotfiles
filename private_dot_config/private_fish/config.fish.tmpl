@@ -33,8 +33,6 @@ if status is-interactive
     alias k='kubectl'
     alias s='sgpt'
     alias kns='kubens'
-    alias clipcp="xsel --clipboard --input"
-    alias clipcat="xsel --clipboard --output"
 
     function q --description "llm query piped through glow"
         llm $argv | glow -p
@@ -46,7 +44,7 @@ if status is-interactive
     set -gx VISUAL {{ $editor }}
 end
 
-set -x GOPATH $HOME/go
+set -gx GOPATH $HOME/go
 {{- if $isRaspbian }}
 # fish_add_path not available in Fish < 3.2; set PATH explicitly
 for p in $GOPATH/bin $HOME/.krew/bin $HOME/.cargo/bin $HOME/.local/bin
@@ -62,8 +60,8 @@ test -f ~/.config/fish/secrets.fish; and source ~/.config/fish/secrets.fish
 {{- if not $isRaspbian }}
 
 ### --- Environment Paths ---
-# Add your local binaries to the path
-fish_add_path $HOME/.local/bin
+# ~/.local/bin is already prepended at the top of this file (before mise
+# activation), so it is deliberately not added again here.
 
 # pnpm
 set -gx PNPM_HOME "$HOME/.local/share/pnpm"

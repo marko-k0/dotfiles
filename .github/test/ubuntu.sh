@@ -60,6 +60,62 @@ fish -n /home/tester/.config/fish/config.fish
 grep -q "mise activate fish" /home/tester/.config/fish/config.fish
 test -f /home/tester/.config/mise/config.toml
 test -f /home/tester/.tmux.conf
+
+# Clipboard over ssh/mosh: tmux only emits OSC 52 when the outer terminfo has an
+# Ms entry (Ubuntu's xterm-256color does not), set-clipboard must be "on"
+# because "external" drops OSC 52 writes from applications, and y must really
+# copy (tmux-yank otherwise pipes the selection into xsel/xclip on a host that
+# has no display). Functional check, not just a string match.
+cat > /tmp/tmux-clipboard-check.sh <<'SH'
+#!/bin/sh
+set -e
+tmux -L citest -f "$HOME/.tmux.conf" new-session -d -s cb 'sh -c "printf \"alpha\nbravo\n\"; sleep 60"'
+[ "$(tmux -L citest show -s set-clipboard)" = "set-clipboard on" ] || {
+    echo "ERROR: tmux set-clipboard is not on" >&2; exit 1; }
+tmux -L citest show -s terminal-overrides | grep -q 'Ms=' || {
+    echo "ERROR: tmux terminal-overrides lacks Ms (OSC 52)" >&2; exit 1; }
+tmux -L citest list-keys -T copy-mode-vi | grep -q 'y .*copy-selection' || {
+    echo "ERROR: copy-mode-vi y is not bound to copy-selection" >&2; exit 1; }
+# Reloading must not print option errors (e.g. tmux-3.5-only options on 3.4)
+# and must not grow terminal-overrides (set -as vs set -g).
+tmux -L citest source-file "$HOME/.tmux.conf" 2>/tmp/tmux-src.err || true
+tmux -L citest source-file "$HOME/.tmux.conf" 2>>/tmp/tmux-src.err || true
+if grep -qE 'invalid option|unknown option|unknown command' /tmp/tmux-src.err; then
+    echo "ERROR: tmux config reload reported an error:" >&2
+    cat /tmp/tmux-src.err >&2
+    exit 1
+fi
+entries="$(tmux -L citest show -s terminal-overrides | wc -l | tr -d ' ')"
+if [ "$entries" -ne 2 ]; then
+    echo "ERROR: terminal-overrides has $entries entries after reloads (expected 2)" >&2
+    tmux -L citest show -s terminal-overrides >&2
+    exit 1
+fi
+# default-shell is fish, which takes a moment to start and print; entering
+# copy-mode before that gives an empty pane (blank-line copy).
+i=0
+while [ $i -lt 200 ]; do
+    tmux -L citest capture-pane -p -t cb | grep -q alpha && break
+    sleep 0.1
+    i=$((i + 1))
+done
+tmux -L citest capture-pane -p -t cb | grep -q alpha || {
+    echo "ERROR: pane never rendered the test text" >&2; exit 1; }
+tmux -L citest copy-mode -t cb
+# Jump to the marker line: the pane can contain shell startup noise above it.
+tmux -L citest send-keys -t cb -X search-backward alpha
+tmux -L citest send-keys -t cb -X begin-selection
+tmux -L citest send-keys -t cb -X end-of-line
+tmux -L citest send-keys -t cb y
+sleep 0.3
+tmux -L citest show-buffer | grep -q '^alpha' || {
+    echo "ERROR: y did not copy the selection into a tmux buffer" >&2; exit 1; }
+tmux -L citest kill-server
+echo "tmux clipboard checks passed"
+SH
+chmod 755 /tmp/tmux-clipboard-check.sh
+su tester -c /tmp/tmux-clipboard-check.sh
+
 # Neovim: fully managed LazyVim config (nothing cloned)
 test -f /home/tester/.config/nvim/init.lua
 test -f /home/tester/.config/nvim/lua/config/lazy.lua
@@ -95,6 +151,52 @@ if ! printf '%s\n' "$picker_log" | grep -q 'picker=telescope'; then
     printf '%s\n' "$picker_log" >&2
     exit 1
 fi
+
+# OSC 52 wiring in lua/config/options.lua: copy always exists (the only route to
+# the local clipboard from a remote nvim), paste only where a terminal could
+# answer a read query, and a real yank must emit the escape sequence.
+# nvim_ui_send is stubbed, so no terminal is needed.
+cat > /tmp/clipcheck.lua <<'LUA'
+local cb = vim.g.clipboard or {}
+io.write(string.format("copy=%d paste=%d\n",
+  cb.copy and vim.tbl_count(cb.copy) or 0,
+  cb.paste and vim.tbl_count(cb.paste) or 0))
+local n = 0
+for _, a in ipairs(vim.api.nvim_get_autocmds({ event = "TextYankPost" })) do
+  if a.group_name == "dotfiles-osc52" then n = n + 1 end
+end
+io.write("autocmds=" .. n .. "\n")
+local sent = nil
+local orig = vim.api.nvim_ui_send
+vim.api.nvim_ui_send = function(seq) sent = seq end
+require("vim.ui.clipboard.osc52").copy("+")({ "alpha" })
+io.write("direct=" .. tostring(sent) .. "\n")
+sent = nil
+vim.api.nvim_buf_set_lines(0, 0, -1, false, { "yanked-line" })
+vim.cmd("normal! yy")
+io.write("yank=" .. tostring(sent) .. "\n")
+vim.api.nvim_ui_send = orig
+vim.cmd("qa!")
+LUA
+clip_args="'+luafile /home/tester/.config/nvim/lua/config/options.lua' '+luafile /tmp/clipcheck.lua'"
+assert_clip() {
+    log="$1"; want="$2"; label="$3"
+    printf '%s\n' "$log" | grep -q "copy=2 paste=$want" || {
+        echo "ERROR: $label clipboard wiring (expected copy=2 paste=$want):" >&2
+        printf '%s\n' "$log" >&2; exit 1; }
+    printf '%s\n' "$log" | grep -q 'autocmds=1' || {
+        echo "ERROR: $label TextYankPost autocmd missing:" >&2
+        printf '%s\n' "$log" >&2; exit 1; }
+    # base64("yanked-line"); the autocmd must have produced an OSC 52 sequence.
+    printf '%s\n' "$log" | grep -q 'yank=.*eWFua2VkLWxpbmU=' || {
+        echo "ERROR: $label yank did not emit OSC 52:" >&2
+        printf '%s\n' "$log" >&2; exit 1; }
+}
+local_clip="$(su tester -c "nvim --headless -u NONE -i NONE $clip_args" 2>&1)"
+assert_clip "$local_clip" 2 local
+remote_clip="$(su tester -c "SSH_CONNECTION='1.2.3.4 1 5.6.7.8 22' nvim --headless -u NONE -i NONE $clip_args" 2>&1)"
+assert_clip "$remote_clip" 0 remote
+
 # A failed lazy.nvim clone must exit headless instead of blocking on getchar():
 # without a UI getchar() waits forever, which would stall `chezmoi apply`.
 nvim_bin="$(su tester -c "fish -c 'command -v nvim'")"

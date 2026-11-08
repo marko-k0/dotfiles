@@ -8,7 +8,9 @@ set -g default-terminal "tmux-256color"
 set -g default-shell /usr/bin/fish
 set -g history-limit 50000
 set -g extended-keys on
-set -g extended-keys-format csi-u
+# extended-keys-format is a tmux 3.5+ option; setting it on 3.4 (Ubuntu 24.04)
+# fails with "invalid option" while loading the config.
+if-shell -F '#{>=:#{version},3.5}' 'set -g extended-keys-format csi-u'
 
 bind v split-window -h -c "#{pane_current_path}"
 bind b split-window -c "#{pane_current_path}"
@@ -50,14 +52,35 @@ set -g focus-events on
 set -g mouse on
 
 # clipboard & terminal features
-set -s set-clipboard external
-set -as terminal-features ',xterm-kitty:clipboard'
-set -as terminal-overrides ',*:Smulx=\E[4::%p1%dm'
+# Terminal capabilities: Ms = OSC 52 clipboard, Smulx = styled underlines.
+# One `set -g` rather than `set -as`: appending would add a duplicate entry on
+# every `source-file` (reload), and the defaults for this option are empty.
+#
+# tmux only emits OSC 52 if the OUTER terminal's terminfo has an Ms entry.
+# Ubuntu's xterm-256color and xterm-kitty do not, so without this override a
+# copy is silently dropped - locally, and over ssh/mosh (mosh relays OSC 52
+# writes, but only if tmux emits them in the first place).
+set -g terminal-overrides ',*:Ms=\E]52;%p1%s;%p2%s\007,*:Smulx=\E[4::%p1%dm'
+# "on", not "external": external discards OSC 52 writes from applications such
+# as Neovim, which is the only way nvim can reach the local clipboard remotely.
+set -s set-clipboard on
 
 # vi copy-paste mode
 setw -g mode-keys vi
-bind -T copy-mode-vi 'v' send -X begin-selection; bind -T copy-mode-vi 'y' send -X copy-selection
-bind-key -T copy-mode-vi y if-shell "test ! -z $KITTY_WINDOW_ID" "send-keys -X copy-pipe 'kitty +kitten clipboard'" "send-keys -X copy-pipe  'pbcopy'"
+bind -T copy-mode-vi 'v' send -X begin-selection
+# y copies through tmux, which emits OSC 52 (see the Ms override above). This
+# replaces tmux-yank: that plugin pipes the selection into xsel/xclip/wl-copy,
+# which fails on a headless remote (no $DISPLAY), and it installs error bindings
+# when no clipboard utility exists at all (e.g. a minimal Arch container),
+# overriding this binding.
+bind -T copy-mode-vi 'y' send -X copy-selection-and-cancel
+bind -T copy-mode-vi 'MouseDragEnd1Pane' send -X copy-selection-and-cancel
 
-set -g update-environment "SSH_AUTH_SOCK SSH_AGENT_PID"
-setenv -g SSH_AUTH_SOCK $HOME/.ssh/ssh_auth_sock
+# SSH agent: ~/.ssh/rc maintains a stable symlink so panes keep working when
+# the ssh connection that created them goes away. Over mosh the bootstrap ssh
+# is already gone when tmux starts, so a stale path is worse than none: use the
+# symlink if it exists, keep a live agent, otherwise drop the variable.
+# SSH_AUTH_SOCK is deliberately not in update-environment for the same reason
+# (attaching from mosh would inject the dead path into the session).
+set -g update-environment "SSH_AGENT_PID"
+run-shell 'sock="$HOME/.ssh/ssh_auth_sock"; if [ -S "$sock" ]; then tmux setenv -g SSH_AUTH_SOCK "$sock"; elif [ -z "$SSH_AUTH_SOCK" ] || [ ! -S "$SSH_AUTH_SOCK" ]; then tmux setenv -gu SSH_AUTH_SOCK 2>/dev/null || true; fi'
