@@ -232,6 +232,12 @@ which fail on a headless remote (no `$DISPLAY`), and when none of those tools
 exists it replaces `y` with an error binding. `y` and mouse-drag yank are bound
 directly to tmux's OSC 52 path instead.
 
+tmux reads these options only when the server starts or the config is reloaded.
+After `chezmoi apply` on a machine whose tmux has been running for a while, run
+`tmux source-file ~/.tmux.conf` (or `prefix r`); otherwise the old
+`set-clipboard`/`terminal-overrides` values stay in effect and application copies
+are still dropped. A fresh login starts a new server, so `init.sh` needs nothing.
+
 What does not work, by design:
 
 - **Programmatic paste from the local clipboard** (`"+p` in Neovim, `xsel -o`

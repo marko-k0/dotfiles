@@ -52,15 +52,18 @@ set -g focus-events on
 set -g mouse on
 
 # clipboard & terminal features
+# Terminal capabilities: Ms = OSC 52 clipboard, Smulx = styled underlines.
+# One `set -g` rather than `set -as`: appending would add a duplicate entry on
+# every `source-file` (reload), and the defaults for this option are empty.
+#
 # tmux only emits OSC 52 if the OUTER terminal's terminfo has an Ms entry.
 # Ubuntu's xterm-256color and xterm-kitty do not, so without this override a
 # copy is silently dropped - locally, and over ssh/mosh (mosh relays OSC 52
 # writes, but only if tmux emits them in the first place).
-set -as terminal-overrides ',*:Ms=\E]52;%p1%s;%p2%s\007'
+set -g terminal-overrides ',*:Ms=\E]52;%p1%s;%p2%s\007,*:Smulx=\E[4::%p1%dm'
 # "on", not "external": external discards OSC 52 writes from applications such
 # as Neovim, which is the only way nvim can reach the local clipboard remotely.
 set -s set-clipboard on
-set -as terminal-overrides ',*:Smulx=\E[4::%p1%dm'
 
 # vi copy-paste mode
 setw -g mode-keys vi
