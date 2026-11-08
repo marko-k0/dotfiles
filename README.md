@@ -216,6 +216,26 @@ runs a headless `Lazy! sync` so a fresh machine comes up with every plugin.
 
 ## Updating
 
+### Taking a merged change on another machine
+
+chezmoi is pull-based: a merge reaches a machine only when that machine pulls.
+On every already-provisioned machine that is one command:
+
+```bash
+chezmoi update      # git pull --autostash --rebase in the checkout, then apply
+```
+
+It pulls `sourceDir` (the checkout `init.sh` configured) and applies, so hooks
+re-run as after `init.sh`. `chezmoi apply` alone does not pull, and
+`./update.sh` only refreshes tool versions; neither brings new commits in. To
+review first: `chezmoi update --apply=false`, then `chezmoi diff`.
+
+Two rules:
+
+- **Keep the checkout read-only on every machine.** Local edits are autostashed,
+  and if that conflicts the conflict markers land in the files written to `$HOME`.
+- **Keep it on `master`.** `chezmoi update` pulls whatever branch is checked out.
+
 **Changing what is installed, or which version** - edit
 `.chezmoidata/software.yaml` and run `chezmoi apply`. It renders
 `~/.config/mise/config.toml`, installs or removes tools, and re-links the
