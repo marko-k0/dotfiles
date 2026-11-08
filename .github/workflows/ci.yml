@@ -25,8 +25,33 @@ jobs:
         # -x: follow the source=/etc/os-release directives in the scripts
         run: shellcheck -x init.sh update.sh .chezmoiscripts/*.sh .github/test/*.sh
       - name: Install chezmoi
+        # Same approach as init.sh: fetch the installer to a file (an empty
+        # download would otherwise exit 0) and retry, because get.chezmoi.io and
+        # the GitHub release it redirects to occasionally return 5xx.
         run: |
-          sh -c "$(curl -fsLS get.chezmoi.io)" -- -b "$HOME/.local/bin"
+          set -euo pipefail
+          install_chezmoi() {
+            local tmp rc=0
+            tmp="$(mktemp)"
+            if curl -fsSL --max-time 60 -o "$tmp" https://get.chezmoi.io && [ -s "$tmp" ]; then
+              sh "$tmp" -b "$HOME/.local/bin" || rc=$?
+            else
+              rc=1
+            fi
+            rm -f "$tmp"
+            return "$rc"
+          }
+          for attempt in 1 2 3; do
+            if install_chezmoi; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "ERROR: could not install chezmoi after 3 attempts" >&2
+              exit 1
+            fi
+            echo "retrying in 5s"
+            sleep 5
+          done
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - name: shellcheck rendered hook templates
         # Hooks are templates (.sh.tmpl): render them with the real data file,

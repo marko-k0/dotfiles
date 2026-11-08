@@ -61,7 +61,22 @@ link_tool() {
 }
 
 log "Installing tools"
-"$MISE" install --yes
+# Upstream release downloads go through GitHub, which occasionally returns
+# 5xx/timeouts. Successfully installed tools are kept between attempts, so a
+# retry only re-fetches what is missing. Without this, one flaky download
+# aborts `chezmoi apply` (and so `chezmoi update`) with the rest of the hooks
+# unrun.
+install_attempts=3
+attempt=1
+until "$MISE" install --yes; do
+    if [ "$attempt" -ge "$install_attempts" ]; then
+        warn "mise install failed after ${install_attempts} attempts; re-run 'chezmoi apply' or './update.sh'"
+        exit 1
+    fi
+    warn "mise install failed (attempt ${attempt}/${install_attempts}), retrying in 5s"
+    attempt=$((attempt + 1))
+    sleep 5
+done
 
 case "$INSTALL_MODE" in
     user)

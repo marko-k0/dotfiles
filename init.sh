@@ -22,13 +22,42 @@ if ! command -v curl >/dev/null 2>&1; then
 fi
 
 # --- chezmoi ----------------------------------------------------------------
+# Download the installer to a file first: `sh -c "$(curl ...)"` exits 0 on an
+# empty download, so a failed fetch would look like success. get.chezmoi.io and
+# the GitHub release it redirects to occasionally return 5xx, hence the retries.
+install_chezmoi() {
+    local tmp rc=0
+    tmp="$(mktemp)"
+    if curl -fsSL --max-time 60 -o "$tmp" https://get.chezmoi.io && [ -s "$tmp" ]; then
+        sh "$tmp" -b "$HOME/.local/bin" || rc=$?
+    else
+        rc=1
+    fi
+    rm -f "$tmp"
+    return "$rc"
+}
+
 if command -v chezmoi >/dev/null 2>&1; then
     echo "==> chezmoi already installed: $(chezmoi --version | head -1)"
 else
     echo "==> Installing chezmoi..."
-    sh -c "$(curl -fsLS get.chezmoi.io)" -- -b "$HOME/.local/bin"
+    for attempt in 1 2 3; do
+        if install_chezmoi; then
+            break
+        fi
+        if [ "$attempt" -eq 3 ]; then
+            echo "ERROR: could not install chezmoi after 3 attempts" >&2
+            exit 1
+        fi
+        echo "    download failed (attempt ${attempt}/3), retrying in 5s" >&2
+        sleep 5
+    done
 fi
 export PATH="$HOME/.local/bin:$PATH"
+command -v chezmoi >/dev/null 2>&1 || {
+    echo "ERROR: chezmoi is not on PATH after installation" >&2
+    exit 1
+}
 
 # --- Point chezmoi at this checkout (supports worktrees) --------------------
 # Only the sourceDir key is replaced: other settings in an existing
