@@ -241,11 +241,19 @@ which fail on a headless remote (no `$DISPLAY`), and when none of those tools
 exists it replaces `y` with an error binding. `y` and mouse-drag yank are bound
 directly to tmux's OSC 52 path instead.
 
-tmux reads these options only when the server starts or the config is reloaded.
-After `chezmoi apply` on a machine whose tmux has been running for a while, run
-`tmux source-file ~/.tmux.conf` (or `prefix r`); otherwise the old
-`set-clipboard`/`terminal-overrides` values stay in effect and application copies
-are still dropped. A fresh login starts a new server, so `init.sh` needs nothing.
+Two of these behave differently after `chezmoi apply` on a machine whose tmux has
+been running for a while:
+
+- **`set-clipboard`** is read on every copy, so `tmux source-file ~/.tmux.conf`
+  (or `prefix r`) is enough.
+- **`terminal-overrides`** is parsed once, when the client's tty is created
+  (`tty_update_features()`), so a reload updates the option but *not* the
+  already-attached client. Detach and reattach to get a fresh client
+  (`tmux detach-client -s <session>`, then `tmux attach -t <session>`), or
+  restart the server. Verified: same client still emitted `]52;;` after a
+  reload; a reattached client emitted `]52;c;`.
+
+A fresh login starts a new server and client, so `init.sh` needs nothing.
 
 What does not work, by design:
 
