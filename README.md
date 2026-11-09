@@ -221,22 +221,39 @@ terminal). Nothing needs X forwarding or `xclip` on the server.
 
 Two tmux settings are required and are set in `dot_tmux.conf.common`:
 
-- `set -as terminal-overrides ',*:Ms=\E]52;%p1%s;%p2%s\007'` - tmux only emits
+- `set -g terminal-overrides ',*:Ms=\E]52;c;%p1%l%p2%s\007'` - tmux only emits
   OSC 52 when the outer terminal's terminfo has an `Ms` entry, and Ubuntu's
   `xterm-256color`/`xterm-kitty` do not, so without it copies are silently lost.
+  The selection is hardcoded to `c`, and `%p1` is consumed with `%l` (length,
+  no output), because **mosh only relays `ESC ] 52 ; c ; <base64> BEL`** while
+  tmux's own copy-mode emits an empty selection (`ESC ] 52 ; ; ...`). A plain
+  `%p2%s` without `%p1` is not an option either: ncurses' `tiparm_s()` returns
+  NULL when a parameter is skipped and tmux then writes nothing.
 - `set -s set-clipboard on` - with `external`, tmux drops OSC 52 writes coming
   from applications, so Neovim copies never leave the server.
+
+One consequence of the hardcoded `c`: an application copying to the *primary*
+selection (`"*` in Neovim) lands on the clipboard instead. mosh cannot carry `p`
+at all, so this is the better trade. Over plain ssh both forms work unchanged.
 
 `tmux-yank` is not used: it pipes the selection into `xsel`/`xclip`/`wl-copy`,
 which fail on a headless remote (no `$DISPLAY`), and when none of those tools
 exists it replaces `y` with an error binding. `y` and mouse-drag yank are bound
 directly to tmux's OSC 52 path instead.
 
-tmux reads these options only when the server starts or the config is reloaded.
-After `chezmoi apply` on a machine whose tmux has been running for a while, run
-`tmux source-file ~/.tmux.conf` (or `prefix r`); otherwise the old
-`set-clipboard`/`terminal-overrides` values stay in effect and application copies
-are still dropped. A fresh login starts a new server, so `init.sh` needs nothing.
+Two of these behave differently after `chezmoi apply` on a machine whose tmux has
+been running for a while:
+
+- **`set-clipboard`** is read on every copy, so `tmux source-file ~/.tmux.conf`
+  (or `prefix r`) is enough.
+- **`terminal-overrides`** is parsed once, when the client's tty is created
+  (`tty_update_features()`), so a reload updates the option but *not* the
+  already-attached client. Detach and reattach to get a fresh client
+  (`tmux detach-client -s <session>`, then `tmux attach -t <session>`), or
+  restart the server. Verified: same client still emitted `]52;;` after a
+  reload; a reattached client emitted `]52;c;`.
+
+A fresh login starts a new server and client, so `init.sh` needs nothing.
 
 What does not work, by design:
 
