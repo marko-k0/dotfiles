@@ -74,6 +74,14 @@ tmux -L citest -f "$HOME/.tmux.conf" new-session -d -s cb 'sh -c "printf \"alpha
     echo "ERROR: tmux set-clipboard is not on" >&2; exit 1; }
 tmux -L citest show -s terminal-overrides | grep -q 'Ms=' || {
     echo "ERROR: tmux terminal-overrides lacks Ms (OSC 52)" >&2; exit 1; }
+# mosh 1.4.0 only relays "ESC ] 52 ; c ; <base64> BEL"; tmux's copy-mode passes
+# an EMPTY selection, so Ms must hardcode 'c'. It must still reference %p1:
+# ncurses' tiparm_s() returns NULL when a parameter is skipped and tmux then
+# writes nothing at all, which silently kills copying on every transport.
+tmux -L citest show -s terminal-overrides | grep -q 'Ms=.*;c;' || {
+    echo "ERROR: Ms must hardcode selection 'c' (mosh drops ']52;;')" >&2; exit 1; }
+tmux -L citest show -s terminal-overrides | grep -q 'Ms=.*%p1' || {
+    echo "ERROR: Ms must reference %p1 (tiparm_s returns NULL otherwise)" >&2; exit 1; }
 tmux -L citest list-keys -T copy-mode-vi | grep -q 'y .*copy-selection' || {
     echo "ERROR: copy-mode-vi y is not bound to copy-selection" >&2; exit 1; }
 # Reloading must not print option errors (e.g. tmux-3.5-only options on 3.4)
