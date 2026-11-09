@@ -58,9 +58,21 @@ set -g mouse on
 #
 # tmux only emits OSC 52 if the OUTER terminal's terminfo has an Ms entry.
 # Ubuntu's xterm-256color and xterm-kitty do not, so without this override a
-# copy is silently dropped - locally, and over ssh/mosh (mosh relays OSC 52
-# writes, but only if tmux emits them in the first place).
-set -g terminal-overrides ',*:Ms=\E]52;%p1%s;%p2%s\007,*:Smulx=\E[4::%p1%dm'
+# copy is silently dropped - locally, and over ssh/mosh.
+#
+# The selection is hardcoded to "c" because mosh 1.4.0 only relays OSC 52 of
+# the exact form "ESC ] 52 ; c ; <base64> BEL" (terminal/terminalfunctions.cc
+# compares those five characters). tmux passes an EMPTY selection for its own
+# copy-mode ("ESC ] 52 ; ; ..."), which mosh drops, so "y" over mosh was
+# silently dead while the same key worked over ssh.
+#
+# %p1 is tmux's selection argument ("" for copy-mode, "c"/"p" when relaying an
+# application's OSC 52). It must be referenced: ncurses' tiparm_s() returns NULL
+# when a parameter is skipped, and tmux then writes nothing at all. %l consumes
+# it (string length, no output), so the emitted selection stays "c" either way.
+# Consequence: an application's primary-selection copy ("p") also lands on the
+# clipboard. mosh cannot carry "p" at all, so this is the better trade.
+set -g terminal-overrides ',*:Ms=\E]52;c;%p1%l%p2%s\007,*:Smulx=\E[4::%p1%dm'
 # "on", not "external": external discards OSC 52 writes from applications such
 # as Neovim, which is the only way nvim can reach the local clipboard remotely.
 set -s set-clipboard on
