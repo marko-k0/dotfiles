@@ -11,8 +11,8 @@ vim.keymap.set("n", "<leader>fW", function()
   require("telescope.builtin").grep_string()
 end, { desc = "Grep word under cursor" })
 
--- Aerial symbol outline (also available as <leader>cs from the aerial extra)
-vim.keymap.set("n", "<leader>a", "<cmd>AerialToggle<CR>", { desc = "Aerial toggle" })
+-- Aerial symbol outline: <leader>cs comes from the editor.aerial extra; no
+-- local mapping here, so that <leader>a can stay the LazyVim AI prefix.
 
 -- crates.nvim: upgrade every outdated crate in Cargo.toml
 vim.keymap.set("n", "<leader>rcu", function()
