@@ -182,7 +182,8 @@ Handled inside the scripts/templates, no per-distro bootstrap needed:
 
 Rust (rustaceanvim, crates.nvim), Go (gopls, goimports/gofumpt, delve),
 Docker/Kubernetes YAML/Helm/JSON (`lang.docker`, `lang.yaml`, `lang.helm`,
-`lang.json`), Copilot, codecompanion, Telescope, Aerial, Neogit, nvim-dap,
+`lang.json`), Copilot, codecompanion (routed through the local litellm
+gateway), Telescope, Aerial, Neogit, nvim-dap,
 maximize.nvim.
 
 Quality-of-life extras: `coding.mini-surround` (`gsa`/`gsd`/`gsr`), `editor.inc-rename`
@@ -272,7 +273,13 @@ What does not work, by design:
 
 - Log out and back in for fish shell to take effect
 - Run `tide configure` to set up the fish prompt
-- Set `OPENAI_API_KEY` environment variable for codecompanion.nvim
+- `codecompanion` uses the local litellm gateway at
+  `http://127.0.0.1:4000` (model `OpenRouter/DeepSeek-V4.1-Flash`), so no
+  provider API key is needed. The adapter is plain OpenAI-compatible, so any
+  endpoint works: set `LLM_URL`, `LLM_API_KEY` and `LLM_MODEL` (for example in
+  `~/.config/fish/secrets.fish`). Direct OpenRouter is
+  `LLM_URL=https://openrouter.ai/api` with `LLM_MODEL=deepseek/deepseek-v4.1-flash-1017`
+  and your own `sk-or-v1-...` key; keep `/v1` off `LLM_URL` in every case
 - Start `nvim` once interactively: the headless plugin sync in the apply hook
   installs LazyVim and the plugins, but Mason's tool downloads (LSP servers,
   debug adapters) are background jobs that outlive that headless run. They
