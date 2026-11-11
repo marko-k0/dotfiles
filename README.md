@@ -186,13 +186,13 @@ Docker/Kubernetes YAML/Helm/JSON (`lang.docker`, `lang.yaml`, `lang.helm`,
 gateway), Telescope, Aerial, Neogit, nvim-dap,
 maximize.nvim.
 
-codecompanion lives under LazyVim's `<leader>a` ("+ai") prefix:
-`<leader>ac` toggles the chat, `<leader>ae` runs an inline edit on a selection
-and `<leader>aa` opens the actions palette. Its keys must not sit under
-`<leader>c`, which is LazyVim's code prefix: once a language server attaches it
-installs buffer-local maps for `<leader>ca` (Code Action) and `<leader>cc` (Run
-Codelens) that override any global mapping, which is exactly why an earlier
-`<leader>cc` chat binding appeared to do nothing. Aerial is on `<leader>cs`.
+codecompanion lives under `<leader>i` ("+ai"): `<leader>ic` toggles the chat,
+`<leader>ie` runs an inline edit on a selection and `<leader>ia` opens the
+actions palette. Two keys are unavailable: `<leader>a` is the Aerial toggle
+(also `<leader>cs`), and `<leader>c` is LazyVim's code prefix, where a language
+server installs buffer-local `<leader>ca` (Code Action) and `<leader>cc` (Run
+Codelens) maps on attach that override any global binding, which is why an
+earlier `<leader>cc` chat key did nothing.
 
 Quality-of-life extras: `coding.mini-surround` (`gsa`/`gsd`/`gsr`), `editor.inc-rename`
 (live rename preview via `<leader>cr`), `editor.illuminate` (highlight other
