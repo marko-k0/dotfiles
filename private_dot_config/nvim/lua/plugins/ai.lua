@@ -1,4 +1,21 @@
 -- AI: Copilot comes from the ai.copilot extra; codecompanion is added here.
+--
+-- CodeCompanion talks to any OpenAI-compatible endpoint. The defaults target
+-- the local litellm gateway, which needs no provider API key. Point it
+-- elsewhere with env vars (e.g. in ~/.config/fish/secrets.fish):
+--
+--   LLM_URL      root URL, no /v1 suffix (default http://127.0.0.1:4000)
+--   LLM_API_KEY  bearer token (default sk-litellm-local, the local master key)
+--   LLM_MODEL    model id (default OpenRouter/DeepSeek-V4.1-Flash)
+--
+-- Direct OpenRouter, for example:
+--
+--   LLM_URL=https://openrouter.ai/api
+--   LLM_API_KEY=sk-or-v1-...
+--   LLM_MODEL=deepseek/deepseek-v4.1-flash-1017
+--
+-- Note that model ids are endpoint-specific: the litellm alias
+-- "OpenRouter/DeepSeek-V4.1-Flash" is not a valid OpenRouter model.
 return {
   {
     "olimorris/codecompanion.nvim",
@@ -18,16 +35,40 @@ return {
       { "<leader>ca", "<cmd>CodeCompanionActions<CR>", mode = { "n", "v" }, desc = "CodeCompanion actions" },
     },
     opts = {
-      strategies = {
-        chat = { adapter = "openai" },
-        inline = { adapter = "openai" },
+      -- v20 spells this `interactions`; `strategies` still works as an alias.
+      interactions = {
+        chat = { adapter = "llm" },
+        inline = { adapter = "llm" },
       },
       adapters = {
-        openai = function()
-          return require("codecompanion.adapters").extend("openai", {
-            env = { api_key = "OPENAI_API_KEY" },
-          })
-        end,
+        -- Custom adapters must be nested under `http` (or `acp`): a flat
+        -- `adapters = { llm = ... }` is stored but never resolved.
+        http = {
+          llm = function()
+            return require("codecompanion.adapters").extend("openai_compatible", {
+              formatted_name = "OpenAI-compatible",
+              env = {
+                -- Root URL only: the adapter appends /v1/chat/completions and
+                -- /v1/models, so "http://127.0.0.1:4000/v1" or
+                -- "https://openrouter.ai/api/v1" would 404.
+                url = function()
+                  return vim.env.LLM_URL or "http://127.0.0.1:4000"
+                end,
+                -- A placeholder is not enough: the proxy answers
+                -- 401 "must start with sk-", so the local master key is the
+                -- default and a real key replaces it.
+                api_key = function()
+                  return vim.env.LLM_API_KEY or "sk-litellm-local"
+                end,
+              },
+              schema = {
+                -- Litellm model id, case sensitive ("V4.1" not "v4.1"). Other
+                -- endpoints use their own ids; override with LLM_MODEL.
+                model = { default = vim.env.LLM_MODEL or "OpenRouter/DeepSeek-V4.1-Flash" },
+              },
+            })
+          end,
+        },
       },
     },
   },
