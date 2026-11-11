@@ -30,15 +30,15 @@ return {
       "CodeCompanionChat",
     },
     keys = {
-      -- <leader>a is LazyVim's AI prefix (avante/claudecode/copilot-chat all use
-      -- it). <leader>c is LazyVim's code prefix: buffer-local LSP maps own
-      -- <leader>ca (Code Action) and <leader>cc (Run Codelens) once a server
-      -- attaches, and those override a global mapping, so AI keys must not
-      -- live there.
-      { "<leader>a", "", desc = "+ai", mode = { "n", "v" } },
-      { "<leader>ac", "<cmd>CodeCompanionChat Toggle<CR>", desc = "CodeCompanion chat" },
-      { "<leader>ae", "<cmd>CodeCompanion<CR>", mode = { "n", "v" }, desc = "CodeCompanion inline" },
-      { "<leader>aa", "<cmd>CodeCompanionActions<CR>", mode = { "n", "v" }, desc = "CodeCompanion actions" },
+      -- <leader>a is a leaf mapping (Aerial toggle) and <leader>c belongs to
+      -- LazyVim's LSP keys: it installs buffer-local <leader>ca/<leader>cc
+      -- (Code Action, Run Codelens) on LspAttach, which silently shadow a
+      -- global mapping. <leader>i is unused by LazyVim and every installed
+      -- plugin, and needs no shift.
+      { "<leader>i", "", desc = "+ai", mode = { "n", "v" } },
+      { "<leader>ic", "<cmd>CodeCompanionChat Toggle<CR>", desc = "CodeCompanion chat" },
+      { "<leader>ie", "<cmd>CodeCompanion<CR>", mode = { "n", "v" }, desc = "CodeCompanion inline" },
+      { "<leader>ia", "<cmd>CodeCompanionActions<CR>", mode = { "n", "v" }, desc = "CodeCompanion actions" },
     },
     opts = {
       -- v20 spells this `interactions`; `strategies` still works as an alias.
