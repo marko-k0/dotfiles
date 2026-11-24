@@ -222,6 +222,15 @@ Copying from a remote machine to the local clipboard uses **OSC 52**, which is
 relayed by ssh and by mosh (mosh forwards `OSC 52;c;` writes to the local
 terminal). Nothing needs X forwarding or `xclip` on the server.
 
+OSC 52 is a **fallback**, not the default: it is installed only when there is
+no usable system clipboard, meaning a remote session (`SSH_CONNECTION` or
+`MOSH_IP`) or a local box without `wl-copy`/`xclip`/`xsel` and a display. On a
+normal desktop nothing is overridden, so Neovim's own
+`clipboard=unnamedplus` keeps using the real clipboard and `y`/`p` behave
+normally. Overriding it locally was a bug: `p` then went through the OSC 52
+provider, which cannot read (see below), so local copy/paste broke while the
+remote path kept working.
+
 | Action | How |
 |---|---|
 | tmux copy-mode -> local clipboard | `prefix [`, select, `y` (tmux emits OSC 52) |
@@ -272,10 +281,12 @@ What does not work, by design:
   (`clipboard_control write-clipboard write-primary no-append`), so reads are
   denied at the terminal. Use the terminal's paste instead.
 - **`clipboard=unnamedplus`** is not set remotely (LazyVim already leaves
-  `clipboard` empty when `SSH_CONNECTION` is set). It would route `p`/`P`
-  through the clipboard provider, which either stalls for ten seconds waiting
-  for a read reply or pastes characterwise and loses linewise semantics, and it
-  would send every delete to the local clipboard.
+  `clipboard` empty when `SSH_CONNECTION` is set), and the local fallback clears
+  it too. It would route `p`/`P` through the clipboard provider, which either
+  stalls for ten seconds waiting for a read reply or pastes characterwise and
+  loses linewise semantics, and it would send every delete to the local
+  clipboard. On a desktop with a real clipboard provider it is left as LazyVim
+  set it.
 
 ## Post-install
 
