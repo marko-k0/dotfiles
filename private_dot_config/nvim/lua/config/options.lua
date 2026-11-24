@@ -16,15 +16,29 @@ opt.number = true
 opt.relativenumber = false
 opt.scrolloff = 8
 
--- OSC 52 clipboard: copy over ssh, mosh and tmux without xclip/xsel or X
--- forwarding. Neovim 0.10+ ships the encoders as a module; the previous guard
+-- OSC 52 clipboard fallback, used only where no real system clipboard exists:
+-- over ssh/mosh (no X or Wayland socket) or on a local box without a usable
+-- wl-copy/xclip. There it is the only route to the local clipboard. Neovim
+-- 0.10+ ships the encoders as a module; the previous guard
 -- (`vim.ui.clipboard and vim.ui.clipboard.osc52`) never matched, because
--- `vim.ui.clipboard` is nil and only `vim.ui.clipboard.osc52` exists. See the
--- "Clipboard" section of the README for what works in each environment.
+-- `vim.ui.clipboard` is nil and only `vim.ui.clipboard.osc52` exists.
+--
+-- It must NOT replace the provider locally: LazyVim sets
+-- 'clipboard=unnamedplus' when not in ssh, so p/P and y all go through this
+-- table, and its paste half cannot work (tmux does not forward OSC 52 read
+-- queries, and this repo's kitty config grants writes only), which made local
+-- yank/paste fail while remote kept working. See the "Clipboard" section of the
+-- README.
 local has_osc52, osc52 = pcall(require, "vim.ui.clipboard.osc52")
-if has_osc52 then
-  local remote = vim.env.SSH_CONNECTION ~= nil
+local remote = vim.env.SSH_CONNECTION ~= nil or vim.env.MOSH_IP ~= nil
+-- Mirrors Neovim's own provider detection: a tool that exists but has no
+-- display to talk to (e.g. xsel on a headless server) is not usable.
+local has_system_clipboard = (vim.env.WAYLAND_DISPLAY ~= nil and vim.fn.executable("wl-copy") == 1)
+  or (vim.env.DISPLAY ~= nil and (vim.fn.executable("xclip") == 1 or vim.fn.executable("xsel") == 1))
+  or (vim.fn.has("mac") == 1 and vim.fn.executable("pbcopy") == 1)
+  or (vim.fn.has("win32") == 1 and vim.fn.executable("win32yank.exe") == 1)
 
+if has_osc52 and (remote or not has_system_clipboard) then
   vim.g.clipboard = {
     name = "OSC 52",
     copy = {
@@ -32,15 +46,19 @@ if has_osc52 then
       ["*"] = osc52.copy("*"),
     },
     -- Paste needs a terminal that answers OSC 52 read queries. tmux does not
-    -- forward them in any mode (verified on 3.4), and a terminal may deny reads
-    -- (this repo's kitty config grants writes only), in which case nvim waits
-    -- 1s + 9s and then warns. Leaving paste undefined makes "+p fail fast, so
-    -- the supported path is the terminal's own paste (Ctrl+Shift+V in kitty).
-    paste = (remote or vim.env.TMUX) and {} or {
-      ["+"] = osc52.paste("+"),
-      ["*"] = osc52.paste("*"),
-    },
+    -- forward them in any mode (verified on 3.4), and this repo's kitty config
+    -- denies reads, in which case nvim waits 1s + 9s and then warns. Leaving it
+    -- empty makes "+p fail fast, so the supported path is the terminal's own
+    -- paste (Ctrl+Shift+V in kitty).
+    paste = {},
   }
+
+  -- Without a system clipboard LazyVim would still set clipboard=unnamedplus
+  -- locally, routing p/P through the empty provider above. Keep p/P on
+  -- Neovim's own registers instead (remote already gets clipboard empty).
+  if not remote then
+    opt.clipboard = ""
+  end
 
   -- Copy on a normal yank too, but without 'clipboard=unnamedplus': that option
   -- also routes p/P through the clipboard (which stalls, and loses linewise

@@ -162,15 +162,19 @@ if ! printf '%s\n' "$picker_log" | grep -q 'picker=telescope'; then
     exit 1
 fi
 
-# OSC 52 wiring in lua/config/options.lua: copy always exists (the only route to
-# the local clipboard from a remote nvim), paste only where a terminal could
-# answer a read query, and a real yank must emit the escape sequence.
-# nvim_ui_send is stubbed, so no terminal is needed.
+# OSC 52 wiring in lua/config/options.lua: it is a fallback for environments
+# with no real system clipboard (remote, or a local box with no usable
+# wl-copy/xclip), where it is copy-only; y and "+y must emit the escape
+# sequence. Locally with a real clipboard tool nothing is overridden, so
+# LazyVim's clipboard=unnamedplus keeps using it and y/p work. nvim_ui_send is
+# stubbed, so no terminal is needed.
 cat > /tmp/clipcheck.lua <<'LUA'
 local cb = vim.g.clipboard or {}
-io.write(string.format("copy=%d paste=%d\n",
+io.write("provider=" .. tostring(cb.name or "none") .. "\n")
+io.write(string.format("copy=%d paste=%d clipboard=%q\n",
   cb.copy and vim.tbl_count(cb.copy) or 0,
-  cb.paste and vim.tbl_count(cb.paste) or 0))
+  cb.paste and vim.tbl_count(cb.paste) or 0,
+  vim.o.clipboard))
 local n = 0
 for _, a in ipairs(vim.api.nvim_get_autocmds({ event = "TextYankPost" })) do
   if a.group_name == "dotfiles-osc52" then n = n + 1 end
@@ -190,9 +194,12 @@ vim.cmd("qa!")
 LUA
 clip_args="'+luafile /home/tester/.config/nvim/lua/config/options.lua' '+luafile /tmp/clipcheck.lua'"
 assert_clip() {
-    log="$1"; want="$2"; label="$3"
-    printf '%s\n' "$log" | grep -q "copy=2 paste=$want" || {
-        echo "ERROR: $label clipboard wiring (expected copy=2 paste=$want):" >&2
+    log="$1"; label="$2"
+    printf '%s\n' "$log" | grep -q 'provider=OSC 52' || {
+        echo "ERROR: $label OSC 52 provider missing:" >&2
+        printf '%s\n' "$log" >&2; exit 1; }
+    printf '%s\n' "$log" | grep -q 'copy=2 paste=0' || {
+        echo "ERROR: $label clipboard wiring (expected copy=2 paste=0):" >&2
         printf '%s\n' "$log" >&2; exit 1; }
     printf '%s\n' "$log" | grep -q 'autocmds=1' || {
         echo "ERROR: $label TextYankPost autocmd missing:" >&2
@@ -202,10 +209,28 @@ assert_clip() {
         echo "ERROR: $label yank did not emit OSC 52:" >&2
         printf '%s\n' "$log" >&2; exit 1; }
 }
-local_clip="$(su tester -c "nvim --headless -u NONE -i NONE $clip_args" 2>&1)"
-assert_clip "$local_clip" 2 local
+assert_no_override() {
+    log="$1"; label="$2"
+    printf '%s\n' "$log" | grep -q 'provider=none' || {
+        echo "ERROR: $label system clipboard was overridden by OSC 52:" >&2
+        printf '%s\n' "$log" >&2; exit 1; }
+    printf '%s\n' "$log" | grep -q 'autocmds=0' || {
+        echo "ERROR: $label OSC 52 autocmd installed locally:" >&2
+        printf '%s\n' "$log" >&2; exit 1; }
+}
+local_clip="$(su tester -c "env -u DISPLAY -u WAYLAND_DISPLAY nvim --headless -u NONE -i NONE $clip_args" 2>&1)"
+assert_clip "$local_clip" "local fallback"
 remote_clip="$(su tester -c "SSH_CONNECTION='1.2.3.4 1 5.6.7.8 22' nvim --headless -u NONE -i NONE $clip_args" 2>&1)"
-assert_clip "$remote_clip" 0 remote
+assert_clip "$remote_clip" remote
+# With a usable system clipboard (Wayland + wl-copy, as on a desktop) nothing
+# may be overridden: LazyVim's clipboard=unnamedplus has to keep using it, or
+# local yank/paste breaks while remote keeps working.
+rm -rf /tmp/fakeclip
+mkdir -p /tmp/fakeclip
+printf '#!/bin/sh\nexit 0\n' > /tmp/fakeclip/wl-copy
+chmod 755 /tmp/fakeclip/wl-copy
+sys_clip="$(su tester -c "WAYLAND_DISPLAY=wayland-0 PATH=/tmp/fakeclip:\$PATH nvim --headless -u NONE -i NONE $clip_args" 2>&1)"
+assert_no_override "$sys_clip" "local desktop"
 
 test -f /home/tester/.local/bin/chezmoi
 pacman -Qi fish tmux >/dev/null
