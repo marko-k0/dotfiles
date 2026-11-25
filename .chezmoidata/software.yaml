@@ -71,19 +71,6 @@ mise:
     kube-score: "1.20.0"
     trivy: "0.76.2"
     sloth: "0.12.0"
-    # Rust goes through mise's rustup backend. The table form is required here:
-    # the minimal profile has no rust-analyzer, and without the component the
-    # rustup proxy in ~/.cargo/bin ("unavailable for the active toolchain")
-    # falls back to mise's shim for the same name and recurses.
-    # Cost with this profile/components: ~750 MB in ~/.rustup.
-    rust:
-      version: "1.97.0"
-      profile: minimal
-      components:
-        - rust-analyzer   # LazyVim's lang.rust / rustaceanvim
-        - rust-src        # go-to-definition into std
-        - rustfmt         # BufWritePre autocmd in lua/config/autocmds.lua
-        - clippy          # rust-analyzer "check on save"
 
 packages:
   # apt-get list (Ubuntu, Debian and derivatives)
