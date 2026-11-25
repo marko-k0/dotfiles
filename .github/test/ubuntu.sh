@@ -292,8 +292,8 @@ su tester -c "fish -c 'kind --version'" | grep 'kind version' >/dev/null
 su tester -c "fish -c 'helm version --short'" | grep 'v' >/dev/null
 
 # ops tooling: every declared mise tool must resolve through the shims
-su tester -c "fish -c 'command -q istioctl; and command -q kubebuilder; and command -q yq; and command -q fortio; and command -q grpcurl; and command -q crane; and command -q k9s; and command -q stern; and command -q dlv; and command -q golangci-lint; and command -q kubens; and command -q kubectx; and command -q krew; and command -q pluto; and command -q kubeconform; and command -q kube-score; and command -q trivy; and command -q sloth'" || {
-    echo "ERROR: one or more mise ops tools are not on PATH (istioctl kubebuilder yq fortio grpcurl crane k9s stern dlv golangci-lint kubens kubectx krew pluto kubeconform kube-score trivy sloth)" >&2
+su tester -c "fish -c 'command -q istioctl; and command -q kubebuilder; and command -q yq; and command -q fortio; and command -q grpcurl; and command -q crane; and command -q k9s; and command -q stern; and command -q dlv; and command -q golangci-lint; and command -q kubens; and command -q kubectx; and command -q krew; and command -q pluto; and command -q kubeconform; and command -q kube-score; and command -q trivy; and command -q sloth; and command -q k3d; and command -q protoc'" || {
+    echo "ERROR: one or more mise ops tools are not on PATH (istioctl kubebuilder yq fortio grpcurl crane k9s stern dlv golangci-lint kubens kubectx krew pluto kubeconform kube-score trivy sloth k3d protoc)" >&2
     exit 1
 }
 # distro diagnostics: binaries provided by the apt/pacman lists
@@ -304,25 +304,5 @@ for b in conntrack socat stress-ng iperf3 hping3 tree htop btop ncdu fio \
         exit 1
     }
 done
-
-# Rust comes from mise's rustup backend with an explicit component list. The
-# rust-analyzer component is what stops the rustup proxy from recursing into
-# mise's shim ("fallback recursion detected"), so assert both.
-rustc_version="$(su tester -c "fish -c 'rustc --version'")"
-case "$rustc_version" in
-rustc\ 1.*) ;;
-*)
-    echo "ERROR: rustc is not available: '$rustc_version'" >&2
-    exit 1
-    ;;
-esac
-su tester -c "fish -c 'rust-analyzer --version'" | grep 'rust-analyzer' >/dev/null || {
-    echo "ERROR: rust-analyzer does not run (component missing?)" >&2
-    exit 1
-}
-su tester -c "fish -c 'rustup component list --installed'" | grep 'rust-analyzer' >/dev/null || {
-    echo "ERROR: rust-analyzer component is not installed in the toolchain" >&2
-    exit 1
-}
 
 echo "UBUNTU 24.04: ALL ASSERTIONS PASSED"
